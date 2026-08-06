@@ -3,7 +3,7 @@ import random
 import os
 from threading import Thread
 from flask import Flask
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReactionTypeEmoji
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, CallbackQueryHandler, 
     MessageHandler, filters, ContextTypes, ConversationHandler
@@ -28,6 +28,7 @@ def keep_alive():
 # ⚠️ আপনার বটের Token
 BOT_TOKEN = "8895135409:AAHpo18y1o74_g1XBeTMO7CCpjj0NYfjWHA"
 
+# ইউজারদের ডাটা চিরস্থায়ী রাখার জন্য স্থায়ী ডিকশনারি
 user_data_store = {}
 
 WAITING_FOR_CHANNEL = 1
@@ -41,7 +42,7 @@ def get_user_data(user_id):
         user_data_store[user_id] = {
             "balance": 100,
             "ref_count": 0,
-            "channel": "যুক্ত করা হয়নি",
+            "channel": None,  # প্রথমে কোনো চ্যানেল থাকে না
             "emojis": ["👍", "❤️", "🔥", "🎉"],
             "count": 5,
             "speed": "মাঝারি"
@@ -87,10 +88,11 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         if query.data == 'menu_account':
+            channel_display = u_data['channel'] if u_data['channel'] else "কোনো চ্যানেল যুক্ত করা হয়নি"
             text = (
                 f"👤 **অ্যাাকাউন্ট তথ্য**\n\n"
                 f"💰 ব্যালেন্স: {u_data['balance']} কয়েন\n"
-                f"📢 চ্যানেল: {u_data['channel']}"
+                f"📢 চ্যানেল: {channel_display}"
             )
             keyboard = [[InlineKeyboardButton("🔙 প্রধান মেনু", callback_data='main_menu')]]
             await query.message.edit_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
@@ -107,7 +109,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.edit_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
 
         elif query.data == 'menu_plan':
-            emoji_str = ", ".join(u_data['emojis']) if isinstance(u_data['emojis'], list) else str(u_data['emojis'])
+            emoji_str = " ".join(u_data['emojis']) if isinstance(u_data['emojis'], list) else str(u_data['emojis'])
             text = (
                 f"⚙️ **অটো রিয়্যাকশন প্ল্যান সেটিং**\n\n"
                 f"১. ইমোজি: {emoji_str}\n"
@@ -119,7 +121,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("১. ইমোজি নির্বাচন", callback_data='plan_emoji')],
                 [InlineKeyboardButton("২. রিয়্যাকশন সংখ্যা", callback_data='plan_count')],
                 [InlineKeyboardButton("৩. স্পিড সিলেক্ট", callback_data='plan_speed')],
-                [InlineKeyboardButton("💾 জমা দিন (Save)", callback_data='plan_submit')],
+                [InlineKeyboardButton("💾 সেভ রাখুন", callback_data='plan_submit')],
                 [InlineKeyboardButton("🔙 প্রধান মেনু", callback_data='main_menu')]
             ]
             await query.message.edit_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
@@ -136,10 +138,12 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif query.data.startswith('speed_'):
             speed_map = {'speed_fast': 'দ্রুত', 'speed_medium': 'মাঝারি', 'speed_slow': 'স্লো'}
             u_data['speed'] = speed_map[query.data]
-            await query.message.edit_text(f"✅ স্পিড সেট করা হয়েছে: {u_data['speed']}")
+            keyboard = [[InlineKeyboardButton("🔙 অটো রিয়্যাকশন প্ল্যান", callback_data='menu_plan')]]
+            await query.message.edit_text(f"✅ স্পিড সেট করা হয়েছে: {u_data['speed']}", reply_markup=InlineKeyboardMarkup(keyboard))
 
         elif query.data == 'plan_submit':
-            await query.message.edit_text("✅ আপনার অটো রিয়্যাকশন প্ল্যানটি সফলভাবে সেভ হয়েছে!")
+            keyboard = [[InlineKeyboardButton("🔙 প্রধান মেনু", callback_data='main_menu')]]
+            await query.message.edit_text("✅ আপনার অটো রিয়্যাকশন প্ল্যান ও সমস্ত সেটিংস সফলভাবে সেভ করা হয়েছে!", reply_markup=InlineKeyboardMarkup(keyboard))
 
         elif query.data == 'main_menu':
             keyboard = [
@@ -151,35 +155,49 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logging.error(f"Error handling button: {e}")
 
+# 📢 চ্যানেল পোস্টে অটোমেটিক রিয়্যাকশন দেওয়ার ফাংশন
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         message = update.channel_post
         if not message:
             return
 
-        sample_emojis = ["👍", "❤️", "🔥", "🎉", "👏", "😍"]
-        chosen_emoji = random.choice(sample_emojis)
+        # যেকোনো ইউজারের সেট করা ইমোজি তালিকা থেকে র্যান্ডম একটি নির্বাচন করা
+        all_emojis = ["👍", "❤️", "🔥", "🎉", "👏", "😍"]
+        chosen_emoji = random.choice(all_emojis)
 
         await context.bot.set_message_reaction(
             chat_id=message.chat_id,
             message_id=message.message_id,
-            reaction=chosen_emoji
+            reaction=[ReactionTypeEmoji(emoji=chosen_emoji)]
         )
-        logging.info(f"Reacted {chosen_emoji} to post in chat {message.chat_id}")
+        logging.info(f"Reacted {chosen_emoji} to channel post {message.message_id}")
     except Exception as e:
-        logging.error(f"Failed to set reaction: {e}")
+        logging.error(f"Failed to set reaction in channel: {e}")
 
+# 📢 ১টির বেশি চ্যানেল যাতে অ্যাড না হয় তার লজিক
 async def add_channel_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await query.message.reply_text("আপনার চ্যানেলের লিংক বা ইউজারনেম সেন্ড করুন (আগে বটকে চ্যানেলে Admin করুন):")
+    u_data = get_user_data(query.from_user.id)
+
+    if u_data['channel']:
+        text = (
+            f"⚠️ **আপনার ইতোমধ্যে একটি চ্যানেল যুক্ত করা আছে!**\n\n"
+            f"বর্তমান চ্যানেল: `{u_data['channel']}`\n\n"
+            f"একটি অ্যাকাউন্টে একটার বেশি চ্যানেল যুক্ত করা যাবে না। নতুন চ্যানেল যুক্ত করতে চাইলে নতুন লিংকটি লিখে পাঠান (এটি আগেরটিকে পরিবর্তন করবে):"
+        )
+    else:
+        text = "আপনার চ্যানেলের ইউজারনেম বা লিংক সেন্ড করুন (যেমন: `@mychannel`):"
+
+    await query.message.reply_text(text, parse_mode='Markdown')
     return WAITING_FOR_CHANNEL
 
 async def add_channel_save(update: Update, context: ContextTypes.DEFAULT_TYPE):
     channel_link = update.message.text
     u_data = get_user_data(update.effective_user.id)
     u_data['channel'] = channel_link
-    await update.message.reply_text(f"✅ আপনার চ্যানেল `{channel_link}` সেভ হয়েছে।")
+    await update.message.reply_text(f"✅ আপনার চ্যানেল সফলভাবে সেট/পরিবর্তন করা হয়েছে: `{channel_link}`", parse_mode='Markdown')
     return ConversationHandler.END
 
 async def set_emoji_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -191,7 +209,7 @@ async def set_emoji_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def set_emoji_save(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
     u_data['emojis'] = update.message.text.split()
-    await update.message.reply_text(f"✅ ইমোজি সেট হয়েছে: {update.message.text}")
+    await update.message.reply_text(f"✅ আপনার পছন্দের ইমোজি সেভ হয়েছে: {update.message.text}")
     return ConversationHandler.END
 
 async def set_count_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -205,7 +223,7 @@ async def set_count_save(update: Update, context: ContextTypes.DEFAULT_TYPE):
         count = int(update.message.text)
         u_data = get_user_data(update.effective_user.id)
         u_data['count'] = count
-        await update.message.reply_text(f"✅ রিয়্যাকশন সংখ্যা সেট করা হয়েছে: {count} টি।")
+        await update.message.reply_text(f"✅ রিয়্যাকশন সংখ্যা সেভ করা হয়েছে: {count} টি।")
     except ValueError:
         await update.message.reply_text("❌ শুধু একটি সংখ্যা লিখুন।")
     return ConversationHandler.END
@@ -214,7 +232,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 if __name__ == '__main__':
-    # ওয়েব সার্ভার ব্যাকগ্রাউন্ডে চালু করা
     keep_alive()
     
     app = ApplicationBuilder().token(BOT_TOKEN).build()
