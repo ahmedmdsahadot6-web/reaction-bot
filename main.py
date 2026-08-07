@@ -183,22 +183,34 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     target_chat = None
 
+    # ১. যদি ইউজার সরাসরি কোনো পোস্ট ফরওয়ার্ড করে
     if msg.forward_from_chat:
         target_chat = msg.forward_from_chat
+
+    # ২. যদি ইউজার টেক্সট বা লিংক হিসেবে পাঠায়
     elif txt:
         clean_text = txt.strip()
+        # লিংক প্রসেস করা (http/https/t.me কাট করে ইউজারনেম বের করা)
         if "t.me/" in clean_text:
-            clean_text = "@" + clean_text.split("t.me/")[-1].replace("/", "").replace("@", "")
+            clean_text = clean_text.split("t.me/")[-1].replace("/", "").strip()
+            if clean_text.startswith("+") or clean_text.startswith("joinchat"):
+                await msg.reply_text(
+                    "❌ **প্রাইভেট চ্যানেলের ইনভাইট লিংক সাপোর্ট করে না!**\n\n"
+                    "📌 অনুগ্রহ করে প্রাইভেট চ্যানেল থেকে যেকোনো **১টি পোস্ট সরাসরি Forward করে** পাঠান।"
+                )
+                return STEP_CHANNEL
+            clean_text = "@" + clean_text.replace("@", "")
         elif not clean_text.startswith("@") and not clean_text.startswith("-100"):
             clean_text = "@" + clean_text
 
         try:
-            target_chat = await asyncio.wait_for(context.bot.get_chat(clean_text), timeout=5.0)
-        except Exception:
+            target_chat = await context.bot.get_chat(clean_text)
+        except Exception as e:
+            logging.error(f"Chat fetch error: {e}")
             await msg.reply_text(
                 f"❌ **চ্যানেল সংযুক্ত করা যায়নি!**\n\n"
-                f"📌 **সবচেয়ে সহজ উপায়:** আপনার চ্যানেল থেকে যেকোনো ১টি পোস্ট সরাসরি এই বটে **Forward** করে পাঠিয়ে দিন।\n\n"
-                f"⚠️ **অথবা নিশ্চিত করুন:** বটটি চ্যানেলে **Admin** হিসেবে যুক্ত আছে।"
+                f"📌 **সহজ সমাধান:** আপনার চ্যানেল থেকে যেকোনো ১টি পোস্ট সরাসরি এই বটে **Forward** করে পাঠিয়ে দিন।\n\n"
+                f"⚠️ **অথবা নিশ্চিত করুন:**\n১. বটটি চ্যানেলে **Admin** হিসেবে যুক্ত আছে।\n২. চ্যানেল ইউজারনেমটি সঠিক পাঠানো হয়েছে।"
             )
             return STEP_CHANNEL
 
@@ -216,6 +228,7 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"───────────────────"
         )
         await msg.reply_text(confirm_text, parse_mode='Markdown')
+        # চ্যানেল পাওয়ার পর সরাসরি ইমোজি স্টেপে নিয়ে যাওয়া
         return await render_emoji_menu(update, context)
 
     return STEP_CHANNEL
@@ -272,7 +285,8 @@ async def emoji_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Step 2: Reaction Count ---
 async def render_count_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    u_data = get_user_data(update.effective_user.id)
+    user_id = update.effective_user.id
+    u_data = get_user_data(user_id)
     temp = u_data['temp_project']
     text = (
         f"📊 **ধাপ 2 • মোট প্রতিক্রিয়া**\n"
@@ -288,7 +302,7 @@ async def render_count_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     else:
-        await context.bot.send_message(chat_id=update.effective_user.id, text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await context.bot.send_message(chat_id=user_id, text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return STEP_COUNT
 
 async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -309,6 +323,7 @@ async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Step 3: Distribution ---
 async def render_distribution_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
     text = (
         f"⚙️ **ধাপ 3 • বিতরণের ধরন**\n"
         f"───────────────────\n\n"
@@ -323,7 +338,7 @@ async def render_distribution_menu(update: Update, context: ContextTypes.DEFAULT
     if update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     else:
-        await context.bot.send_message(chat_id=update.effective_user.id, text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await context.bot.send_message(chat_id=user_id, text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return STEP_DISTRIBUTION
 
 async def distribution_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -341,7 +356,8 @@ async def distribution_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
 # --- Step 4: Speed ---
 async def render_speed_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    u_data = get_user_data(update.effective_user.id)
+    user_id = update.effective_user.id
+    u_data = get_user_data(user_id)
     temp = u_data['temp_project']
     text = (
         f"⚡ **ধাপ 4 • গতি নির্বাচন**\n"
@@ -355,7 +371,7 @@ async def render_speed_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     else:
-        await context.bot.send_message(chat_id=update.effective_user.id, text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await context.bot.send_message(chat_id=user_id, text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return STEP_SPEED
 
 async def speed_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -373,7 +389,8 @@ async def speed_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Step 5: Views ---
 async def render_views_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    u_data = get_user_data(update.effective_user.id)
+    user_id = update.effective_user.id
+    u_data = get_user_data(user_id)
     temp = u_data['temp_project']
     text = (
         f"👁 **ধাপ 5 • ভিউ কনফিগারেশন**\n"
@@ -387,7 +404,7 @@ async def render_views_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     else:
-        await context.bot.send_message(chat_id=update.effective_user.id, text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await context.bot.send_message(chat_id=user_id, text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return STEP_VIEWS
 
 async def views_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -405,7 +422,8 @@ async def views_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Final Review ---
 async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    u_data = get_user_data(update.effective_user.id)
+    user_id = update.effective_user.id
+    u_data = get_user_data(user_id)
     temp = u_data['temp_project']
     emojis = " ".join(temp['emojis'])
     
@@ -428,7 +446,7 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     else:
-        await context.bot.send_message(chat_id=update.effective_user.id, text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await context.bot.send_message(chat_id=user_id, text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return STEP_REVIEW
 
 # 💾 Finalize Project
@@ -624,7 +642,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "💰 রিচার্জ করুন":
         clean_admin = ADMIN_USERNAME.replace("@", "")
         inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 অ্যাডমিনকে মেসেজ দিন", url=f"https://t.me/{clean_admin}")]])
-        await update.message.reply_text(f"💳 **রিচার্জ করতে অ্যাডমিনের সাথে যোগাযোগ করুন:**\n\n🆔 আপনার ইউজারনেম/আইডি: `{str_id}`\n👤 **অ্যাডমিন:** {ADMIN_USERNAME}", parse_mode='Markdown', reply_markup=inline_kb)
+        await update.message.reply_text(f"💳 **রিচার্জ করতে অ্যাডমিনের সাথে যোগাযোগ করুন:**\n\n🆔 আপনার আইডি: `{str_id}`\n👤 **অ্যাডমিন:** {ADMIN_USERNAME}", parse_mode='Markdown', reply_markup=inline_kb)
 
 if __name__ == '__main__':
     keep_alive()
