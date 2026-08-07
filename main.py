@@ -145,7 +145,7 @@ async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
     await update.message.reply_text(text, parse_mode='Markdown', reply_markup=get_admin_keyboard())
 
-# --- Step 0: Channel Setup (Temporary Context Storage Only) ---
+# --- Step 0: Channel Setup (Temporary Storage Only) ---
 async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = get_user_data(user_id)
@@ -156,7 +156,7 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ **আপনার পর্যাপ্ত ক্রেডিট নেই!**\nনতুন প্রজেক্ট তৈরি করতে রিচার্জ করুন।", parse_mode='Markdown', reply_markup=inline_kb)
         return ConversationHandler.END
 
-    # 💡 ডাটাবেজে নয়, কেবল অস্থায়ী সেশন বা context.user_data তে জমা রাখা হচ্ছে
+    # ড্রাফট প্রজেক্ট (ডাটাবেজে যাবে না)
     context.user_data['draft_project'] = {
         "channel_name": None,
         "channel_id": None,
@@ -171,7 +171,7 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🛰 **ধাপ 0 • চ্যানেল সেটআপ**\n"
         f"───────────────────\n\n"
         f"১) **@{BOT_USERNAME}** কে আপনার চ্যানেলে **Admin** হিসেবে যোগ করুন।\n\n"
-        f"২) এরপর চ্যানেলের যেকোনো **১টি পোস্ট ফরওয়ার্ড (Forward) করে** এখানে পাঠান\n"
+        f"২) এরপর চ্যানেলের যেকোনো **১টি পোস্ট ফরওয়ার্ড করে** এখানে পাঠান\n"
         f"অথবা চ্যানেলের ইউজারনেম/লিংক লিখে পাঠান (যেমন: `@Sahadot_Reaction_Vip` বা `https://t.me/...`):"
     )
     await update.message.reply_text(text, parse_mode='Markdown', reply_markup=cancel_keyboard())
@@ -180,7 +180,6 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     txt = (msg.text or "").strip()
-    user_id = update.effective_user.id
 
     if txt in ["❌ বাতিল করুন", "বাতিল করুন", "🔙 ব্যাক"]:
         context.user_data.pop('draft_project', None)
@@ -190,7 +189,7 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     channel_title = None
     channel_id = None
 
-    # ১. ফরওয়ার্ড মেসেজ থেকে চ্যানেল চেক
+    # ১. ফরওয়ার্ড করা মেসেজ চেক
     if msg.forward_from_chat:
         channel_title = msg.forward_from_chat.title
         channel_id = str(msg.forward_from_chat.id)
@@ -198,11 +197,10 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         channel_title = msg.forward_origin.chat.title
         channel_id = str(msg.forward_origin.chat.id)
 
-    # ২. লিঙ্ক বা ইউজারনেম ইনপুট চেক
+    # ২. ইউজারনেম বা লিঙ্ক ইনপুট চেক
     if not channel_id and txt:
         clean_text = txt
         if "t.me/" in clean_text:
-            # লিংক থেকে ইউজারনেম বের করা
             match = re.search(r"t\.me/([^/]+)", clean_text)
             if match:
                 clean_text = "@" + match.group(1)
@@ -214,27 +212,24 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             channel_title = chat.title or "Channel"
             channel_id = str(chat.id)
         except Exception:
-            # যদি কোনো কারণে API Fail করে তবে একটি কাস্টম নাম দিয়ে দেওয়া যাতে সামনে এগোনো যায়
             channel_title = txt.split("/")[-1].replace("@", "")
-            channel_id = f"custom_{hash(txt)}"
+            channel_id = f"channel_{hash(txt)}"
 
     if channel_id and channel_title:
-        # ড্রাফটে চ্যানেল ডাটা বসানো হচ্ছে (ডাটাবেজে নয়)
         context.user_data['draft_project']['channel_name'] = channel_title
         context.user_data['draft_project']['channel_id'] = channel_id
 
         confirm_text = (
-            f"✅ **চ্যানেল সফলভাবে সংযুক্ত হয়েছে!**\n\n"
+            f"✅ **চ্যানেল সংযুক্ত হয়েছে!**\n\n"
             f"📺 **চ্যানেল:** {channel_title}\n"
-            f"🆔 **আইডি:** `{channel_id}`\n\n"
-            f"*(নোট: প্রকল্পটি তৈরি শেষ করার আগে পর্যন্ত এটি ডাটাবেজে সেভ হবে না)*"
+            f"🆔 **আইডি:** `{channel_id}`"
         )
         await msg.reply_text(confirm_text, parse_mode='Markdown')
         
-        # সঙ্গে সঙ্গে পরবর্তী ধাপ (ইমোজি মেনু) কল
+        # সাথে সাথে পরের স্টেপ (ইমোজি নির্বাচন) দেখানো
         return await render_emoji_menu(update, context)
 
-    await msg.reply_text("❌ চ্যানেলটি ডিটেক্ট করা যায়নি! দয়া করে সঠিক লিঙ্ক পাঠান অথবা পোস্ট ফরওয়ার্ড করুন।")
+    await msg.reply_text("❌ চ্যানেলটি খুঁজে পাওয়া যায়নি! সঠিক ইউজারনেম/লিংক দিন অথবা যেকোনো পোস্ট ফরওয়ার্ড করুন।")
     return STEP_CHANNEL
 
 # --- Step 1: Emoji Choice ---
@@ -248,7 +243,7 @@ async def render_emoji_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"───────────────────\n\n"
         f"📺 **চ্যানেল:** {draft.get('channel_name', 'অজ্ঞাত')}\n"
         f"👉 **বর্তমান নির্বাচিত ইমোজি:** {selected}\n\n"
-        f"নিচের বাটনগুলো চেপে ইমোজি সিলেক্ট করুন। শেষ হলে **'✅ সম্পন্ন'** বাটনে চাপুন।"
+        f"ইমোজি সিলেক্ট করা শেষে **'✅ সম্পন্ন'** চাপুন।"
     )
     
     keyboard = [
@@ -410,7 +405,7 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"│ ⚡ গতি: {draft.get('speed')}\n"
         f"│ ⚙️ বিতরণ: {draft.get('dist')}\n"
         f"└────────────────────\n\n"
-        f"⚠️ **'✅ প্রকল্প তৈরি করুন'** বাটনে চাপ দিলেই কেবল এটি ডাটাবেজে সেভ হবে ও কার্যকর হবে।"
+        f"⚠️ **'✅ প্রকল্প তৈরি করুন'** বাটনে চাপ দিলেই ডাটাবেজে সেভ হবে ও চ্যানেলে অটো রিয়্যাকশন সক্রিয় হবে।"
     )
     keyboard = [
         [InlineKeyboardButton("✅ প্রকল্প তৈরি করুন", callback_data="create_final")],
@@ -419,7 +414,7 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return STEP_REVIEW
 
-# 💾 Finalization: কেবল এই ধাপেই ডাটাবেজে সেভ (save_data) হবে!
+# 💾 Final Save to Database
 async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -431,22 +426,21 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("❌ কোনো তথ্য পাওয়া যায়নি! নতুন করে চেষ্টা করুন।", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
-    # পুরনো সেভ করা ডাটার একই চ্যানেল থাকলে তা আপডেট করা
+    # একই চ্যানেলের আগের প্রজেক্ট থাকলে আপডেট করা
     u_data['projects'] = [p for p in u_data.get('projects', []) if str(p.get('channel_id')) != str(draft['channel_id'])]
 
-    # ডাটাবেজে নতুন প্রজেক্ট রাইট
+    # ডাটাবেজে সেভ
     u_data['projects'].append(draft)
-    save_data(db) # 💾 ডাটাবেজে সেভ সম্পন্ন!
+    save_data(db)
 
-    # অস্থায়ী মেমোরি রিমুভ
     context.user_data.pop('draft_project', None)
 
     await query.message.reply_text(
-        f"🎉 **প্রকল্প সফলভাবে ডাটাবেজে সেভ করা হয়েছে!**\n\n"
+        f"🎉 **প্রকল্প সফলভাবে সেভ করা হয়েছে!**\n\n"
         f"📁 **চ্যানেল:** {draft['channel_name']}\n"
         f"😊 **ইমোজি:** {' '.join(draft['emojis'])}\n"
         f"🚀 **প্রতিক্রিয়া:** {draft['count']}\n\n"
-        f"এখন থেকে এই চ্যানেলে নতুন কোনো পোস্ট দিলে অটোমেটিক রিয়্যাকশন চলে যাবে।",
+        f"এখন থেকে এই চ্যানেলে নতুন যেকোনো পোস্টে অটো রিয়্যাকশন চলে যাবে।",
         reply_markup=get_user_keyboard(), parse_mode='Markdown'
     )
     return ConversationHandler.END
@@ -459,7 +453,7 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
     return ConversationHandler.END
 
-# 👑 Admin Handlers
+# 👑 Admin Actions
 async def start_add_credit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
     await update.message.reply_text("➕ **ক্রেডিট দিতে লিখে পাঠান:** `User_ID Amount`\nযেমন: `7973059882 100`", parse_mode='Markdown')
@@ -551,7 +545,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
     except Exception as e:
         logging.error(f"Auto Reaction Error: {e}")
 
-# 📌 General Main Menu Actions
+# 📌 Main Menu Buttons Handler
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     str_id = str(user_id)
