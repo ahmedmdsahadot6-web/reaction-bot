@@ -1,6 +1,7 @@
 import logging
 import random
 import os
+import json
 from datetime import date
 from threading import Thread
 from flask import Flask
@@ -30,8 +31,26 @@ def keep_alive():
 BOT_TOKEN = "8895135409:AAHpo18y1o74_g1XBeTMO7CCpjj0NYfjWHA"
 BOT_USERNAME = "Sahadot_reaction123_bot"
 
-# Data store
-user_data_store = {}
+# 💾 Permanent Storage System (যাতে বট কিছু না ভুলে)
+DB_FILE = "database.json"
+
+def load_data():
+    if os.path.exists(DB_FILE):
+        try:
+            with open(DB_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_data(data):
+    try:
+        with open(DB_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logging.error(f"Save error: {e}")
+
+user_data_store = load_data()
 
 # Conversation States
 (STEP_CHANNEL, STEP_EMOJI, STEP_COUNT, STEP_DISTRIBUTION, 
@@ -40,8 +59,9 @@ user_data_store = {}
 logging.basicConfig(level=logging.INFO)
 
 def get_user_data(user_id):
-    if user_id not in user_data_store:
-        user_data_store[user_id] = {
+    str_id = str(user_id)
+    if str_id not in user_data_store:
+        user_data_store[str_id] = {
             "credit": 100,
             "cost": 0,
             "ref_count": 0,
@@ -55,7 +75,8 @@ def get_user_data(user_id):
             "selected_views": 0,
             "last_daily_bonus": None
         }
-    return user_data_store[user_id]
+        save_data(user_data_store)
+    return user_data_store[str_id]
 
 # Keyboards
 def get_main_keyboard():
@@ -78,20 +99,21 @@ def cancel_keyboard():
 # --- Start Command ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    get_user_data(user.id)
+    u_data = get_user_data(user.id)
 
     if context.args:
         try:
             ref_str = context.args[0]
             if ref_str.startswith("ref_"):
-                referrer_id = int(ref_str.replace("ref_", ""))
-                if referrer_id != user.id and referrer_id in user_data_store:
+                referrer_id = str(ref_str.replace("ref_", ""))
+                if referrer_id != str(user.id) and referrer_id in user_data_store:
                     user_data_store[referrer_id]["credit"] += 50
                     user_data_store[referrer_id]["ref_credit"] += 50
                     user_data_store[referrer_id]["ref_count"] += 1
+                    save_data(user_data_store)
                     try:
                         await context.bot.send_message(
-                            chat_id=referrer_id, 
+                            chat_id=int(referrer_id), 
                             text="🎉 আপনার রেফারেল লিংকের মাধ্যমে একজন নতুন সদস্য যোগ দিয়েছেন! আপনি +৫০ ক্রেডিট পেয়েছেন।"
                         )
                     except Exception:
@@ -109,6 +131,7 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = get_user_data(user_id)
     u_data['temp_emojis'] = []
+    save_data(user_data_store)
     
     text = (
         f"🛰 **ধাপ 0 • চ্যানেল সেটআপ**\n"
@@ -121,24 +144,23 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
-    
-    # Check if user clicked Cancel
-    if update.message.text and update.message.text in ["বাতিল করুন", "🔙 ব্যাক"]:
+    txt = update.message.text or ""
+
+    if txt in ["বাতিল করুন", "🔙 ব্যাক"]:
         return await cancel_flow(update, context)
 
     # Save Channel details from Forwarded message or Link/Text
     if update.message.forward_from_chat:
         u_data['channel_name'] = update.message.forward_from_chat.title
-        u_data['channel_id'] = update.message.forward_from_chat.id
-    elif update.message.text:
-        u_data['channel_name'] = update.message.text
-        u_data['channel_id'] = update.message.text
+        u_data['channel_id'] = str(update.message.forward_from_chat.id)
     else:
-        u_data['channel_name'] = "My Channel"
-        u_data['channel_id'] = "N/A"
+        u_data['channel_name'] = txt
+        u_data['channel_id'] = txt
+
+    save_data(user_data_store) # 💾 সেভ করা হলো
 
     text = (
-        f"👍 **চ্যানেল সফলভাবে সনাক্ত করা হয়েছে!**\n\n"
+        f"👍 **চ্যানেল সফলভাবে সেভ করা হয়েছে!**\n\n"
         f"📋 **চ্যানেলের বিবরণ:**\n"
         f"───────────────────\n"
         f"📺 **নাম/লিংক:** {u_data['channel_name']}\n"
@@ -181,6 +203,7 @@ async def emoji_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "em_done":
         if not u_data['temp_emojis']:
             u_data['temp_emojis'] = ["👍"]
+        save_data(user_data_store)
         return await ask_count(update, context)
     
     emoji = data.split("_")[1]
@@ -189,6 +212,7 @@ async def emoji_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         u_data['temp_emojis'].append(emoji)
     
+    save_data(user_data_store)
     return await ask_emoji(update, context)
 
 async def ask_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -220,6 +244,7 @@ async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return STEP_COUNT
     
     u_data['selected_count'] = int(query.data.split("_")[1])
+    save_data(user_data_store)
     await query.answer(f"সেট করা হয়েছে: {u_data['selected_count']}")
     return await ask_count(update, context)
 
@@ -249,6 +274,7 @@ async def distribution_callback(update: Update, context: ContextTypes.DEFAULT_TY
         return await ask_count(update, context)
     
     u_data['selected_dist'] = query.data.split("_")[1]
+    save_data(user_data_store)
     await query.answer(f"মোড: {u_data['selected_dist']}")
     return await ask_distribution(update, context)
 
@@ -277,6 +303,7 @@ async def speed_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await ask_distribution(update, context)
     
     u_data['selected_speed'] = query.data.split("_")[1]
+    save_data(user_data_store)
     await query.answer(f"গতি: {u_data['selected_speed']}")
     return await ask_speed(update, context)
 
@@ -305,6 +332,7 @@ async def views_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await ask_speed(update, context)
     
     u_data['selected_views'] = int(query.data.split("_")[1])
+    save_data(user_data_store)
     await query.answer(f"ভিউ: {u_data['selected_views']}")
     return await ask_views(update, context)
 
@@ -334,6 +362,7 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     u_data = get_user_data(query.from_user.id)
+    save_data(user_data_store)
     
     await query.message.reply_text(
         f"🎉 **PROJECT CREATED SUCCESSFULLY!**\n\n"
@@ -426,6 +455,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             bonus = 24
             u_data['credit'] += bonus
             u_data['last_daily_bonus'] = today
+            save_data(user_data_store)
             await update.message.reply_text(
                 f"🎉 **অভিনন্দন!**\n\n> আপনি দৈনিক উপহার হিসেবে **{bonus} ক্রেডিট** পেয়েছেন! 🎁\n\nআরেকটি উপহারের জন্য আগামীকাল আসুন।",
                 parse_mode='Markdown',
@@ -471,7 +501,10 @@ if __name__ == '__main__':
                 CallbackQueryHandler(cancel_flow, pattern="^cancel_flow")
             ]
         },
-        fallbacks=[MessageHandler(filters.Regex("^(বাতিল করুন|🔙 ব্যাক)$"), cancel_flow)]
+        fallbacks=[
+            CommandHandler('start', start),
+            MessageHandler(filters.Regex("^(বাতিল করুন|🔙 ব্যাক)$"), cancel_flow)
+        ]
     )
 
     app.add_handler(conv_handler)
