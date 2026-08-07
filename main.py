@@ -31,7 +31,7 @@ def keep_alive():
 BOT_TOKEN = "8895135409:AAHpo18y1o74_g1XBeTMO7CCpjj0NYfjWHA"
 BOT_USERNAME = "Sahadot_reaction123_bot"
 
-# 💾 Permanent Storage System (যাতে বট কিছু না ভুলে)
+# 💾 Permanent Storage System
 DB_FILE = "database.json"
 
 def load_data():
@@ -157,7 +157,7 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         u_data['channel_name'] = txt
         u_data['channel_id'] = txt
 
-    save_data(user_data_store) # 💾 সেভ করা হলো
+    save_data(user_data_store)
 
     text = (
         f"👍 **চ্যানেল সফলভাবে সেভ করা হয়েছে!**\n\n"
