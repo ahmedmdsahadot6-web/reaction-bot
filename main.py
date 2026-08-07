@@ -27,9 +27,10 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# ⚠️ বটের Token ও Username
+# ⚠️ বটের Config
 BOT_TOKEN = "8895135409:AAHpo18y1o74_g1XBeTMO7CCpjj0NYfjWHA"
 BOT_USERNAME = "Sahadot_reaction123_bot"
+ADMIN_IDS = [7973059882]  # 🔒 শুধুমাত্র এই আইডি-র ইউজার অ্যাডমিন অ্যাক্সেস পাবে
 
 # 💾 Permanent Storage System
 DB_FILE = "database.json"
@@ -40,8 +41,8 @@ def load_data():
             with open(DB_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
-            return {}
-    return {}
+            return {"users": {}, "blocked": []}
+    return {"users": {}, "blocked": []}
 
 def save_data(data):
     try:
@@ -50,18 +51,21 @@ def save_data(data):
     except Exception as e:
         logging.error(f"Save error: {e}")
 
-user_data_store = load_data()
+db = load_data()
+if "users" not in db: db["users"] = {}
+if "blocked" not in db: db["blocked"] = []
 
 # Conversation States
 (STEP_CHANNEL, STEP_EMOJI, STEP_COUNT, STEP_DISTRIBUTION, 
- STEP_SPEED, STEP_VIEWS, STEP_REVIEW) = range(7)
+ STEP_SPEED, STEP_VIEWS, STEP_REVIEW, STEP_ADMIN_ADD_CREDIT, 
+ STEP_ADMIN_BLOCK_USER, STEP_ADMIN_BROADCAST) = range(10)
 
 logging.basicConfig(level=logging.INFO)
 
 def get_user_data(user_id):
     str_id = str(user_id)
-    if str_id not in user_data_store:
-        user_data_store[str_id] = {
+    if str_id not in db["users"]:
+        db["users"][str_id] = {
             "credit": 100,
             "cost": 0,
             "ref_count": 0,
@@ -75,11 +79,11 @@ def get_user_data(user_id):
             "selected_views": 0,
             "last_daily_bonus": None
         }
-        save_data(user_data_store)
-    return user_data_store[str_id]
+        save_data(db)
+    return db["users"][str_id]
 
-# Keyboards
-def get_main_keyboard():
+# ────────────── 📱 ১. সাধারণ ইউজার প্যানেল কিবোর্ড ──────────────
+def get_user_keyboard():
     return ReplyKeyboardMarkup([
         [KeyboardButton("➕ অটো রিয়্যাকশন প্রজেক্ট যোগ করুন")],
         [KeyboardButton("📁 আমার প্রকল্প"), KeyboardButton("⚙️ আরও")],
@@ -93,24 +97,39 @@ def get_more_keyboard():
         [KeyboardButton("🔙 ব্যাক")]
     ], resize_keyboard=True)
 
+# ────────────── 👑 ২. সম্পূর্ণ আলাদা অ্যাডমিন প্যানেল কিবোর্ড ──────────────
+def get_admin_keyboard():
+    return ReplyKeyboardMarkup([
+        [KeyboardButton("📊 বট স্ট্যাটাস"), KeyboardButton("📋 ইউজার লিস্ট")],
+        [KeyboardButton("💳 ক্রেডিট কন্ট্রোল"), KeyboardButton("🚫 ইউজার ব্লক/রিমুভ")],
+        [KeyboardButton("📢 অল ইউজার ব্রডকাস্ট"), KeyboardButton("🔙 ইউজার প্যানেলে যান")]
+    ], resize_keyboard=True)
+
 def cancel_keyboard():
     return ReplyKeyboardMarkup([[KeyboardButton("বাতিল করুন")]], resize_keyboard=True)
 
 # --- Start Command ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    u_data = get_user_data(user.id)
+    str_id = str(user.id)
+    
+    if str_id in db["blocked"]:
+        await update.message.reply_text("🚫 দুঃখিত! আপনাকে বট থেকে ব্লক করা হয়েছে।")
+        return
 
+    get_user_data(user.id)
+
+    # রেফারেল ট্র্যাকিং
     if context.args:
         try:
             ref_str = context.args[0]
             if ref_str.startswith("ref_"):
                 referrer_id = str(ref_str.replace("ref_", ""))
-                if referrer_id != str(user.id) and referrer_id in user_data_store:
-                    user_data_store[referrer_id]["credit"] += 50
-                    user_data_store[referrer_id]["ref_credit"] += 50
-                    user_data_store[referrer_id]["ref_count"] += 1
-                    save_data(user_data_store)
+                if referrer_id != str_id and referrer_id in db["users"]:
+                    db["users"][referrer_id]["credit"] += 50
+                    db["users"][referrer_id]["ref_credit"] += 50
+                    db["users"][referrer_id]["ref_count"] += 1
+                    save_data(db)
                     try:
                         await context.bot.send_message(
                             chat_id=int(referrer_id), 
@@ -121,23 +140,52 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
+    # অ্যাডমিন হলে মেসেজ
+    if user.id in ADMIN_IDS:
+        await update.message.reply_text(
+            f"👑 **স্বাগতম অ্যাডমিন {user.first_name}!**\n\nআপনি অ্যাডমিন মোডে আছেন। অ্যাডমিন ড্যাশবোর্ডে যেতে `/admin` টাইপ করুন।",
+            reply_markup=get_user_keyboard(),
+            parse_mode='Markdown'
+        )
+        return
+
     await update.message.reply_text(
         f"👋 স্বাগতম {user.first_name}!\n\nআপনার অটো রিয়্যাকশন প্রজেক্ট ম্যানেজ করতে নিচের মেনু ব্যবহার করুন:",
-        reply_markup=get_main_keyboard()
+        reply_markup=get_user_keyboard()
     )
+
+# 👑 ───────────────────── 👑 সিকিউরড অ্যাডমিন প্যানেল 👑 ───────────────────── 👑
+async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in ADMIN_IDS:
+        await update.message.reply_text("❌ আপনি অ্যাডমিন নন!")
+        return
+
+    text = (
+        f"👑 **ADMIN CONTROL PANEL**\n"
+        f"═══════════════════════\n"
+        f"এখানে সম্পূর্ণ আলাদা অ্যাডমিন কন্ট্রোল সিস্টেম সক্রিয় রয়েছে।\n\n"
+        f"👥 মোট ইউজার: `{len(db['users'])}` জন\n"
+        f"🚫 ব্লক করা ইউজার: `{len(db['blocked'])}` জন\n"
+        f"═══════════════════════"
+    )
+    await update.message.reply_text(text, parse_mode='Markdown', reply_markup=get_admin_keyboard())
 
 # --- Project Creation Flow ---
 async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    if str(user_id) in db["blocked"]:
+        return ConversationHandler.END
+
     u_data = get_user_data(user_id)
     u_data['temp_emojis'] = []
-    save_data(user_data_store)
+    save_data(db)
     
     text = (
         f"🛰 **ধাপ 0 • চ্যানেল সেটআপ**\n"
         f"───────────────────\n\n"
         f"1) 👤 @{BOT_USERNAME} কে আপনার চ্যানেলে প্রশাসক (Admin) বানান।\n"
-        f"2) 🆔 আপনার চ্যানেলের **লিঙ্ক / ইউজারনেম** লিখে পাঠান অথবা চ্যানেল থেকে যেকোনো একটি পোস্ট **ফরোয়ার্ড করুন**।\n\n👇 👇"
+        f"2) 🆔 আপনার চ্যানেলের **লিঙ্ক / ইউজারনেম** লিখে পাঠান অথবা চ্যানেল থেকে পোস্ট **ফরোয়ার্ড করুন**।\n\n👇 👇"
     )
     await update.message.reply_text(text, parse_mode='Markdown', reply_markup=cancel_keyboard())
     return STEP_CHANNEL
@@ -149,7 +197,6 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if txt in ["বাতিল করুন", "🔙 ব্যাক"]:
         return await cancel_flow(update, context)
 
-    # Save Channel details from Forwarded message or Link/Text
     if update.message.forward_from_chat:
         u_data['channel_name'] = update.message.forward_from_chat.title
         u_data['channel_id'] = str(update.message.forward_from_chat.id)
@@ -157,7 +204,7 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         u_data['channel_name'] = txt
         u_data['channel_id'] = txt
 
-    save_data(user_data_store)
+    save_data(db)
 
     text = (
         f"👍 **চ্যানেল সফলভাবে সেভ করা হয়েছে!**\n\n"
@@ -203,7 +250,7 @@ async def emoji_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "em_done":
         if not u_data['temp_emojis']:
             u_data['temp_emojis'] = ["👍"]
-        save_data(user_data_store)
+        save_data(db)
         return await ask_count(update, context)
     
     emoji = data.split("_")[1]
@@ -212,7 +259,7 @@ async def emoji_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         u_data['temp_emojis'].append(emoji)
     
-    save_data(user_data_store)
+    save_data(db)
     return await ask_emoji(update, context)
 
 async def ask_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -244,7 +291,7 @@ async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return STEP_COUNT
     
     u_data['selected_count'] = int(query.data.split("_")[1])
-    save_data(user_data_store)
+    save_data(db)
     await query.answer(f"সেট করা হয়েছে: {u_data['selected_count']}")
     return await ask_count(update, context)
 
@@ -274,7 +321,7 @@ async def distribution_callback(update: Update, context: ContextTypes.DEFAULT_TY
         return await ask_count(update, context)
     
     u_data['selected_dist'] = query.data.split("_")[1]
-    save_data(user_data_store)
+    save_data(db)
     await query.answer(f"মোড: {u_data['selected_dist']}")
     return await ask_distribution(update, context)
 
@@ -303,7 +350,7 @@ async def speed_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await ask_distribution(update, context)
     
     u_data['selected_speed'] = query.data.split("_")[1]
-    save_data(user_data_store)
+    save_data(db)
     await query.answer(f"গতি: {u_data['selected_speed']}")
     return await ask_speed(update, context)
 
@@ -332,7 +379,7 @@ async def views_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await ask_speed(update, context)
     
     u_data['selected_views'] = int(query.data.split("_")[1])
-    save_data(user_data_store)
+    save_data(db)
     await query.answer(f"ভিউ: {u_data['selected_views']}")
     return await ask_views(update, context)
 
@@ -362,7 +409,7 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     u_data = get_user_data(query.from_user.id)
-    save_data(user_data_store)
+    save_data(db)
     
     await query.message.reply_text(
         f"🎉 **PROJECT CREATED SUCCESSFULLY!**\n\n"
@@ -371,20 +418,88 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🎯 প্রতিক্রিয়া: {u_data['selected_count']}\n"
         f"👁 ভিউ: {u_data['selected_views']}\n\n"
         f"🏠 প্রধান মেনু",
-        reply_markup=get_main_keyboard(), parse_mode='Markdown'
+        reply_markup=get_user_keyboard(), parse_mode='Markdown'
     )
     return ConversationHandler.END
 
 async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_main_keyboard())
+    await update.message.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
     return ConversationHandler.END
 
-# --- General Message Handler for Menu Buttons ---
+# 👑 --- Admin Action Handlers ---
+async def start_add_credit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
+    await update.message.reply_text("➕ **ফরম্যাট লিখে পাঠান:** `User_ID Amount`\nযেমন: `12345678 100`", parse_mode='Markdown')
+    return STEP_ADMIN_ADD_CREDIT
+
+async def process_admin_credit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        parts = update.message.text.split()
+        target_id, amount = parts[0], int(parts[1])
+        if target_id in db['users']:
+            db['users'][target_id]['credit'] += amount
+            save_data(db)
+            await update.message.reply_text(f"✅ ইউজার `{target_id}` এর নতুন ক্রেডিট: {db['users'][target_id]['credit']}", parse_mode='Markdown', reply_markup=get_admin_keyboard())
+        else:
+            await update.message.reply_text("❌ ইউজার পাওয়া যায়নি!", reply_markup=get_admin_keyboard())
+    except Exception as e:
+        await update.message.reply_text(f"❌ ভুল ফরম্যাট! Error: {e}", reply_markup=get_admin_keyboard())
+    return ConversationHandler.END
+
+async def start_block_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
+    await update.message.reply_text("🚫 **ব্লক করার জন্য ইউজার আইডি লিখে পাঠান:**", parse_mode='Markdown')
+    return STEP_ADMIN_BLOCK_USER
+
+async def process_admin_block(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    target_id = update.message.text.strip()
+    if target_id not in db['blocked']:
+        db['blocked'].append(target_id)
+        save_data(db)
+        await update.message.reply_text(f"🚫 ইউজার `{target_id}` কে ব্লক করা হয়েছে।", parse_mode='Markdown', reply_markup=get_admin_keyboard())
+    else:
+        await update.message.reply_text("⚠️ ইউজার আগেই ব্লক করা আছে।", reply_markup=get_admin_keyboard())
+    return ConversationHandler.END
+
+async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
+    await update.message.reply_text("📢 **সবাইকে পাঠানোর মেসেজটি লিখুন:**", parse_mode='Markdown')
+    return STEP_ADMIN_BROADCAST
+
+async def process_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg_text = update.message.text
+    count = 0
+    for uid in db['users']:
+        try:
+            await context.bot.send_message(chat_id=int(uid), text=f"📢 **অ্যাডমিন বার্তা:**\n\n{msg_text}", parse_mode='Markdown')
+            count += 1
+        except Exception:
+            pass
+    await update.message.reply_text(f"🎉 মোট `{count}` জনের কাছে মেসেজ পাঠানো হয়েছে!", parse_mode='Markdown', reply_markup=get_admin_keyboard())
+    return ConversationHandler.END
+
+# --- Message Handler ---
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    if user_id in db["blocked"]:
+        return
+
     text = update.message.text
-    user_id = update.effective_user.id
     u_data = get_user_data(user_id)
 
+    # 👑 Admin Navigation
+    if int(user_id) in ADMIN_IDS:
+        if text == "📊 বট স্ট্যাটাস":
+            return await admin_panel_command(update, context)
+        elif text == "📋 ইউজার লিস্ট":
+            user_list_text = "📋 **ইউজার তালিকা:**\n───────────────────\n"
+            for uid, uinfo in list(db['users'].items())[:20]:
+                user_list_text += f"🆔 `{uid}` | 💎 ক্রেডিট: {uinfo.get('credit', 0)}\n"
+            return await update.message.reply_text(user_list_text, parse_mode='Markdown', reply_markup=get_admin_keyboard())
+        elif text == "🔙 ইউজার প্যানেলে যান":
+            return await update.message.reply_text("🏠 সাধারণ ইউজার মেনু:", reply_markup=get_user_keyboard())
+
+    # 📱 User Navigation
     if text == "🌟 পরিকল্পনা এবং ভারসাম্য":
         project_count = 1 if u_data['channel_name'] else 0
         response_text = (
@@ -398,7 +513,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📊 **ব্যয়:** {u_data['cost']}\n"
             f"📁 **প্রকল্প:** {project_count}"
         )
-        await update.message.reply_text(response_text, parse_mode='Markdown', reply_markup=get_main_keyboard())
+        await update.message.reply_text(response_text, parse_mode='Markdown', reply_markup=get_user_keyboard())
 
     elif text == "📁 আমার প্রকল্প":
         if u_data['channel_name']:
@@ -414,7 +529,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton(f"📁 {ch_name}", callback_data="proj_details")]])
             await update.message.reply_text(response_text, parse_mode='Markdown', reply_markup=inline_kb)
         else:
-            await update.message.reply_text("❌ আপনার কোনো সক্রিয় প্রকল্প/চ্যানেল নেই।", reply_markup=get_main_keyboard())
+            await update.message.reply_text("❌ আপনার কোনো সক্রিয় প্রকল্প/চ্যানেল নেই।", reply_markup=get_user_keyboard())
 
     elif text == "💰 রিচার্জ করুন":
         inline_kb = InlineKeyboardMarkup([
@@ -431,7 +546,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("একটি বিকল্প বেছে নিন:", reply_markup=get_more_keyboard())
 
     elif text == "🔙 ব্যাক":
-        await update.message.reply_text("প্রধান মেনু:", reply_markup=get_main_keyboard())
+        await update.message.reply_text("প্রধান মেনু:", reply_markup=get_user_keyboard())
 
     elif text == "🔗 রেফার করুন এবং আয় করুন":
         ref_link = f"https://t.me/{BOT_USERNAME}?start=ref_{user_id}"
@@ -455,7 +570,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             bonus = 24
             u_data['credit'] += bonus
             u_data['last_daily_bonus'] = today
-            save_data(user_data_store)
+            save_data(db)
             await update.message.reply_text(
                 f"🎉 **অভিনন্দন!**\n\n> আপনি দৈনিক উপহার হিসেবে **{bonus} ক্রেডিট** পেয়েছেন! 🎁\n\nআরেকটি উপহারের জন্য আগামীকাল আসুন।",
                 parse_mode='Markdown',
@@ -466,12 +581,9 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         message = update.channel_post
-        if not message:
-            return
-
+        if not message: return
         all_emojis = ["👍", "❤️", "🔥", "🎉", "👏", "😍", "🤝", "🤗", "😘"]
         chosen_emoji = random.choice(all_emojis)
-
         await context.bot.set_message_reaction(
             chat_id=message.chat_id,
             message_id=message.message_id,
@@ -485,11 +597,14 @@ if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex("^➕ অটো রিয়্যাকশন প্রজেক্ট যোগ করুন$"), start_project)],
+        entry_points=[
+            MessageHandler(filters.Regex("^➕ অটো রিয়্যাকশন প্রজেক্ট যোগ করুন$"), start_project),
+            MessageHandler(filters.Regex("^💳 ক্রেডিট কন্ট্রোল$"), start_add_credit),
+            MessageHandler(filters.Regex("^🚫 ইউজার ব্লক/রিমুভ$"), start_block_user),
+            MessageHandler(filters.Regex("^📢 অল ইউজার ব্রডকাস্ট$"), start_broadcast),
+        ],
         states={
-            STEP_CHANNEL: [
-                MessageHandler(filters.ALL & ~filters.COMMAND, save_channel)
-            ],
+            STEP_CHANNEL: [MessageHandler(filters.ALL & ~filters.COMMAND, save_channel)],
             STEP_EMOJI: [CallbackQueryHandler(emoji_callback, pattern="^em_")],
             STEP_COUNT: [CallbackQueryHandler(count_callback, pattern="^(cnt_|back_emoji|locked)")],
             STEP_DISTRIBUTION: [CallbackQueryHandler(distribution_callback, pattern="^(dist_|back_count)")],
@@ -499,7 +614,10 @@ if __name__ == '__main__':
                 CallbackQueryHandler(finalize_project, pattern="^create_final"),
                 CallbackQueryHandler(ask_views, pattern="^back_views"),
                 CallbackQueryHandler(cancel_flow, pattern="^cancel_flow")
-            ]
+            ],
+            STEP_ADMIN_ADD_CREDIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_credit)],
+            STEP_ADMIN_BLOCK_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_block)],
+            STEP_ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_broadcast)]
         },
         fallbacks=[
             CommandHandler('start', start),
@@ -509,6 +627,7 @@ if __name__ == '__main__':
 
     app.add_handler(conv_handler)
     app.add_handler(CommandHandler('start', start))
+    app.add_handler(CommandHandler('admin', admin_panel_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
     app.add_handler(MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post))
 
