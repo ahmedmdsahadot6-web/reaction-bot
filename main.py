@@ -2,6 +2,7 @@ import logging
 import random
 import os
 import json
+import asyncio
 from threading import Thread
 from flask import Flask
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup, ReactionTypeEmoji
@@ -15,7 +16,7 @@ web_app = Flask('')
 
 @web_app.route('/')
 def home():
-    return "Bot is running 24/7!"
+    return "Bot Status: ACTIVE 24/7"
 
 def run_web():
     port = int(os.environ.get("PORT", 8080))
@@ -148,9 +149,9 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"🛰 **ধাপ 0 • চ্যানেল সেটআপ**\n"
         f"───────────────────\n\n"
-        f"১) **@{BOT_USERNAME}** কে আপনার চ্যানেলে **Admin** হিসেবে এড করুন।\n\n"
+        f"১) **@{BOT_USERNAME}** কে আপনার চ্যানেলে **Admin** হিসেবে যোগ করুন।\n\n"
         f"২) এরপর চ্যানেলের যেকোনো **১টি পোস্ট ফরওয়ার্ড (Forward) করে** এখানে পাঠান\n"
-        f"অথবা ইউজারনেম (যেমন: `@Sahadot_Reaction_Vip`) লিখে পাঠান:"
+        f"অথবা ইউজারনেম/লিংক লিখে পাঠান:"
     )
     await update.message.reply_text(text, parse_mode='Markdown', reply_markup=cancel_keyboard())
     return STEP_CHANNEL
@@ -166,10 +167,10 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     target_chat = None
 
-    # ১. ফরওয়ার্ড করা মেসেজ থেকে চ্যানেল ধরা
+    # ১. ফরওয়ার্ড মেসেজ চেক
     if msg.forward_from_chat:
         target_chat = msg.forward_from_chat
-    # ২. ইউজারনেম/লিংক থেকে চ্যানেল ধরা
+    # ২. টেক্সট/লিংক চেক
     elif txt:
         clean_text = txt.strip()
         if "t.me/" in clean_text:
@@ -178,15 +179,13 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             clean_text = "@" + clean_text
 
         try:
-            target_chat = await context.bot.get_chat(clean_text)
+            # ৩ সেকেন্ডের মধ্যে রেসপন্স না পেলে ক্যাচ করবে
+            target_chat = await asyncio.wait_for(context.bot.get_chat(clean_text), timeout=5.0)
         except Exception as err:
             await msg.reply_text(
-                f"❌ **চ্যানেল পাওয়া যায়নি!**\n\n"
-                f"📌 **সহজ উপায়:** আপনার চ্যানেল থেকে যেকোনো ১টি পোস্ট সরাসরি এই বটে **Forward** করে পাঠিয়ে দিন।\n\n"
-                f"⚠️ **অথবা নিশ্চিত করুন:**\n"
-                f"• বটটি (`@{BOT_USERNAME}`) চ্যানেলে **Admin** আছে।\n"
-                f"• ইউজারনেম সঠিক দেওয়া হয়েছে।\n\n"
-                f"*(ত্রুটি: {err})*"
+                f"❌ **চ্যানেল সংযুক্ত করা যায়নি!**\n\n"
+                f"👉 **সবচেয়ে সহজ উপায়:** আপনার চ্যানেল থেকে যেকোনো একটি পোস্ট সরাসরি এই বটে **Forward** করে পাঠাই দিন।\n\n"
+                f"⚠️ **অথবা নিশ্চিত করুন:** বটটি চ্যানেলে **Admin** রয়েছে।"
             )
             return STEP_CHANNEL
 
@@ -204,13 +203,14 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"───────────────────"
         )
         await msg.reply_text(confirm_text, parse_mode='Markdown')
-        return await ask_emoji(update, context)
+        return await render_emoji_menu(update, context)
 
     return STEP_CHANNEL
 
 # --- Step 1: Emoji ---
-async def ask_emoji(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    u_data = get_user_data(update.effective_user.id)
+async def render_emoji_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    u_data = get_user_data(user_id)
     temp = u_data['temp_project']
     selected = " ".join(temp['emojis']) if temp['emojis'] else "(none)"
     
@@ -233,7 +233,7 @@ async def ask_emoji(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     else:
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await context.bot.send_message(chat_id=user_id, text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return STEP_EMOJI
 
 async def emoji_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -246,7 +246,7 @@ async def emoji_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "em_done":
         if not temp['emojis']: temp['emojis'] = ["👍"]
         save_data(db)
-        return await ask_count(update, context)
+        return await render_count_menu(update, context)
     elif data == "em_all":
         temp['emojis'] = ["❤️", "👍", "🔥", "💯"]
     elif data != "em_custom":
@@ -255,10 +255,10 @@ async def emoji_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else: temp['emojis'].append(emoji)
     
     save_data(db)
-    return await ask_emoji(update, context)
+    return await render_emoji_menu(update, context)
 
 # --- Step 2: Reaction Count ---
-async def ask_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def render_count_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
     temp = u_data['temp_project']
     text = (
@@ -277,21 +277,22 @@ async def ask_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    await query.answer()
     u_data = get_user_data(query.from_user.id)
     temp = u_data['temp_project']
     
-    if query.data == "cnt_done": return await ask_distribution(update, context)
-    if query.data == "back_emoji": return await ask_emoji(update, context)
+    if query.data == "cnt_done": return await render_distribution_menu(update, context)
+    if query.data == "back_emoji": return await render_emoji_menu(update, context)
     if query.data == "locked":
         await query.answer("এটি প্রিমিয়াম ফিচার!", show_alert=True)
         return STEP_COUNT
     
     temp['count'] = int(query.data.split("_")[1])
     save_data(db)
-    return await ask_count(update, context)
+    return await render_count_menu(update, context)
 
 # --- Step 3: Distribution ---
-async def ask_distribution(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def render_distribution_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"⚙️ **ধাপ 3 • বিতরণের ধরন**\n"
         f"───────────────────\n\n"
@@ -308,18 +309,19 @@ async def ask_distribution(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def distribution_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    await query.answer()
     u_data = get_user_data(query.from_user.id)
     temp = u_data['temp_project']
     
-    if query.data == "dist_done": return await ask_speed(update, context)
-    if query.data == "back_count": return await ask_count(update, context)
+    if query.data == "dist_done": return await render_speed_menu(update, context)
+    if query.data == "back_count": return await render_count_menu(update, context)
 
     temp['dist'] = query.data.split("_")[1]
     save_data(db)
-    return await ask_distribution(update, context)
+    return await render_distribution_menu(update, context)
 
 # --- Step 4: Speed ---
-async def ask_speed(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def render_speed_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
     temp = u_data['temp_project']
     text = (
@@ -336,18 +338,19 @@ async def ask_speed(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def speed_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    await query.answer()
     u_data = get_user_data(query.from_user.id)
     temp = u_data['temp_project']
     
-    if query.data == "spd_done": return await ask_views(update, context)
-    if query.data == "back_dist": return await ask_distribution(update, context)
+    if query.data == "spd_done": return await render_views_menu(update, context)
+    if query.data == "back_dist": return await render_distribution_menu(update, context)
 
     temp['speed'] = query.data.split("_")[1]
     save_data(db)
-    return await ask_speed(update, context)
+    return await render_speed_menu(update, context)
 
 # --- Step 5: Views ---
-async def ask_views(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def render_views_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
     temp = u_data['temp_project']
     text = (
@@ -364,18 +367,19 @@ async def ask_views(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def views_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    await query.answer()
     u_data = get_user_data(query.from_user.id)
     temp = u_data['temp_project']
     
-    if query.data == "vw_done": return await show_review(update, context)
-    if query.data == "back_speed": return await ask_speed(update, context)
+    if query.data == "vw_done": return await render_review_menu(update, context)
+    if query.data == "back_speed": return await render_speed_menu(update, context)
 
     temp['views'] = int(query.data.split("_")[1])
     save_data(db)
-    return await ask_views(update, context)
+    return await render_views_menu(update, context)
 
 # --- Final Review ---
-async def show_review(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
     temp = u_data['temp_project']
     emojis = " ".join(temp['emojis'])
@@ -399,7 +403,7 @@ async def show_review(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return STEP_REVIEW
 
-# 💾 'প্রকল্প তৈরি করুন' ফাইনাল সেভ
+# 💾 'প্রকল্প তৈরি করুন' সেভ
 async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -437,7 +441,7 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard(user_id))
     return ConversationHandler.END
 
-# 👑 Admin Features Handler
+# 👑 Admin Handlers
 async def start_add_credit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
     await update.message.reply_text("➕ **ক্রেডিট দিতে লিখে পাঠান:** `User_ID Amount`\nযেমন: `7973059882 100`", parse_mode='Markdown')
@@ -489,7 +493,7 @@ async def process_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_
     await update.message.reply_text(f"🎉 মোট `{count}` জন ইউজারের কাছে মেসেজ চলে গেছে!", parse_mode='Markdown', reply_markup=get_admin_keyboard())
     return ConversationHandler.END
 
-# ⚡ চ্যানেলে নতুন পোস্ট এলে অটো-রিয়্যাকশন পাঠানো
+# ⚡ অটো রিয়্যাকশন পোস্ট ডেলিভারি
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         message = update.channel_post
@@ -564,15 +568,15 @@ if __name__ == '__main__':
             MessageHandler(filters.Regex("^📢 অল ইউজার ব্রডকাস্ট$"), start_broadcast),
         ],
         states={
-            STEP_CHANNEL: [MessageHandler(filters.TEXT | filters.FORWARDED, save_channel)],
-            STEP_EMOJI: [CallbackQueryHandler(emoji_callback, pattern="^em_")],
+            STEP_CHANNEL: [MessageHandler(filters.ALL & ~filters.COMMAND, save_channel)],
+            STEP_EMOJI: [CallbackQueryHandler(emoji_callback, pattern="^(em_|em_done)")],
             STEP_COUNT: [CallbackQueryHandler(count_callback, pattern="^(cnt_|back_emoji|locked)")],
             STEP_DISTRIBUTION: [CallbackQueryHandler(distribution_callback, pattern="^(dist_|back_count)")],
             STEP_SPEED: [CallbackQueryHandler(speed_callback, pattern="^(spd_|back_dist)")],
             STEP_VIEWS: [CallbackQueryHandler(views_callback, pattern="^(vw_|back_speed)")],
             STEP_REVIEW: [
-                CallbackQueryHandler(finalize_project, pattern="^create_final"),
-                CallbackQueryHandler(cancel_flow, pattern="^cancel_flow")
+                CallbackQueryHandler(finalize_project, pattern="^create_final$"),
+                CallbackQueryHandler(cancel_flow, pattern="^cancel_flow$")
             ],
             STEP_ADMIN_ADD_CREDIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_credit)],
             STEP_ADMIN_BLOCK_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_block)],
