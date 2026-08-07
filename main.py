@@ -12,7 +12,7 @@ from telegram.ext import (
     MessageHandler, filters, ContextTypes, ConversationHandler
 )
 
-# 🌐 Render Web Server (Fixed Binding)
+# 🌐 Render Web Server
 web_app = Flask('')
 
 @web_app.route('/')
@@ -182,7 +182,8 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     txt = msg.text or ""
-    u_data = get_user_data(update.effective_user.id)
+    user_id = update.effective_user.id
+    u_data = get_user_data(user_id)
 
     if txt in ["❌ বাতিল করুন", "বাতিল করুন", "🔙 ব্যাক"]:
         await msg.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
@@ -210,8 +211,21 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return STEP_CHANNEL
 
     if target_chat:
+        target_id_str = str(target_chat.id)
+
+        # 🔒 চ্যানেল ডুপ্লিকেট সিকিউরিটি চেক: অন্য কেউ এই চ্যানেল ইতোমধ্যে যুক্ত করেছে কি না
+        for uid, info in db["users"].items():
+            for proj in info.get("projects", []):
+                if str(proj.get("channel_id")) == target_id_str and str(uid) != str(user_id):
+                    await msg.reply_text(
+                        f"⚠️ **এই চ্যানেলটি ইতোমধ্যেই অন্য একজন ব্যবহারকারী যোগ করেছেন!**\n\n"
+                        f"একটি চ্যানেল একাধিক ইউজার বটের সাথে যুক্ত করতে পারবে না।",
+                        reply_markup=get_user_keyboard()
+                    )
+                    return ConversationHandler.END
+
         u_data['temp_project']['channel_name'] = target_chat.title or "Channel"
-        u_data['temp_project']['channel_id'] = str(target_chat.id)
+        u_data['temp_project']['channel_id'] = target_id_str
         save_data(db)
 
         confirm_text = (
@@ -431,6 +445,9 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(user_id)
     temp = u_data['temp_project']
 
+    # যদি কোনো প্রজেক্ট পূর্বে একই চ্যানেলে থাকে, সেটি আপডেট করা হবে
+    u_data['projects'] = [p for p in u_data.get('projects', []) if str(p.get('channel_id')) != str(temp['channel_id'])]
+
     new_proj = {
         "channel_name": temp['channel_name'],
         "channel_id": temp['channel_id'],
@@ -441,7 +458,6 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "views": temp['views']
     }
     
-    # প্রজেক্ট লিস্টে যুক্ত করে ডাটাবেজে সেভ
     u_data['projects'].append(new_proj)
     save_data(db)
     
@@ -522,11 +538,11 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
         
         channel_id = str(message.chat_id)
 
-        # ডাটাবেজ খুঁজে প্রজেক্টের মালিককে চিহ্নিত করা
+        # ডাটাবেজে সঠিক প্রজেক্টটি খুঁজে বের করা
         for uid, uinfo in db["users"].items():
             for proj in uinfo.get("projects", []):
                 if str(proj.get("channel_id")) == channel_id:
-                    # ইউজার ক্রেডিট পরীক্ষা
+                    # ইউজার ক্রেডিট চেক
                     if uinfo.get("credit", 0) <= 0:
                         try:
                             clean_admin = ADMIN_USERNAME.replace("@", "")
@@ -544,14 +560,14 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                     target_emojis = proj.get("emojis", ["👍"])
                     chosen_emoji = random.choice(target_emojis) if target_emojis else "👍"
                     
-                    # চ্যানেলের পোস্টে রিয়্যাকশন পাঠানো
+                    # চ্যানেলের পোস্টে রিয়্যাকশন দেওয়া
                     await context.bot.set_message_reaction(
                         chat_id=message.chat_id,
                         message_id=message.message_id,
                         reaction=[ReactionTypeEmoji(emoji=chosen_emoji)]
                     )
 
-                    # ১টি রিয়্যাকশনের জন্য ১টি ক্রেডিট কেটে নেওয়া
+                    # ক্রেডিট কাটা
                     uinfo["credit"] -= 1
                     save_data(db)
                     return
@@ -618,7 +634,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "🆘 সহায়তা":
         clean_admin = ADMIN_USERNAME.replace("@", "")
         inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 অ্যাডমিনকে মেসেজ দিন", url=f"https://t.me/{clean_admin}")]])
-        await update.message.reply_text(f"🆘 **সহায়তা ও সাপোর্ট**\n───────────────────\nআপনার কোনো সমস্যা বা প্রশ্ন থাকলে সরাসরি আমাদের অ্যাডমিনের সাথে যোগাযোগ করুন।", parse_mode='Markdown', reply_markup=inline_kb)
+        await update.message.reply_text(f"🆘 **সহায়তা ও সাপোর্ট**\n───────────────────\nআপনার কোনো समस्या বা প্রশ্ন থাকলে সরাসরি আমাদের অ্যাডমিনের সাথে যোগাযোগ করুন।", parse_mode='Markdown', reply_markup=inline_kb)
 
     elif text == "🌟 পরিকল্পনা এবং ভারসাম্য":
         p_count = len(u_data.get('projects', []))
