@@ -124,9 +124,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     get_user_data(user.id)
     await update.message.reply_text(
-        f"👋 **স্বাগতম {user.first_name}!**\n\nঅটো রিয়্যাকশন প্রজেক্ট তৈরি করতে নিচের **'➕ অটো রিয়্যাকশন প্রজেক্ট যোগ করুন'** বাটন চাপুন:",
-        reply_markup=get_user_keyboard(),
-        parse_mode='Markdown'
+        f"👋 স্বাগতম {user.first_name}!\n\nঅটো রিয়্যাকশন প্রজেক্ট তৈরি করতে নিচের '➕ অটো রিয়্যাকশন প্রজেক্ট যোগ করুন' বাটন চাপুন:",
+        reply_markup=get_user_keyboard()
     )
 
 # 👑 Admin Panel Access
@@ -137,15 +136,15 @@ async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     text = (
-        f"👑 **ADMIN CONTROL PANEL**\n"
+        f"👑 ADMIN CONTROL PANEL\n"
         f"═══════════════════════\n\n"
-        f"👥 মোট ইউজার: `{len(db['users'])}`\n"
-        f"🚫 ব্লককৃত ইউজার: `{len(db['blocked'])}`\n"
+        f"👥 মোট ইউজার: {len(db['users'])}\n"
+        f"🚫 ব্লককৃত ইউজার: {len(db['blocked'])}\n"
         f"═══════════════════════"
     )
-    await update.message.reply_text(text, parse_mode='Markdown', reply_markup=get_admin_keyboard())
+    await update.message.reply_text(text, reply_markup=get_admin_keyboard())
 
-# --- Step 0: Channel Setup (Always Proceeds to Next Step) ---
+# --- Step 0: Channel Setup ---
 async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = get_user_data(user_id)
@@ -153,10 +152,9 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if u_data['credit'] <= 0:
         clean_admin = ADMIN_USERNAME.replace("@", "")
         inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 অ্যাডমিনকে মেসেজ দিন", url=f"https://t.me/{clean_admin}")]])
-        await update.message.reply_text("⚠️ **আপনার পর্যাপ্ত ক্রেডিট নেই!**\nনতুন প্রজেক্ট তৈরি করতে রিচার্জ করুন।", parse_mode='Markdown', reply_markup=inline_kb)
+        await update.message.reply_text("⚠️ আপনার পর্যাপ্ত ক্রেডিট নেই!\nনতুন প্রজেক্ট তৈরি করতে রিচার্জ করুন।", reply_markup=inline_kb)
         return ConversationHandler.END
 
-    # ড্রাফট সেটআপ
     context.user_data['draft_project'] = {
         "channel_name": None,
         "channel_id": None,
@@ -169,13 +167,13 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
     
     text = (
-        f"🛰 **ধাপ 0 • চ্যানেল সেটআপ**\n"
+        f"🛰 ধাপ 0 • চ্যানেল সেটআপ\n"
         f"───────────────────\n\n"
-        f"১) **@{BOT_USERNAME}** কে আপনার চ্যানেলে **Admin** হিসেবে যোগ করুন।\n\n"
-        f"২) এরপর চ্যানেলের যেকোনো **১টি পোস্ট ফরওয়ার্ড করে** এখানে পাঠান\n"
-        f"অথবা চ্যানেলের ইউজারনেম/লিংক লিখে পাঠান (যেমন: `@Sahadot_Reaction_Vip` বা `https://t.me/...`):"
+        f"১) @{BOT_USERNAME} কে আপনার চ্যানেলে Admin হিসেবে যোগ করুন।\n\n"
+        f"২) এরপর চ্যানেলের যেকোনো ১টি পোস্ট ফরওয়ার্ড করে এখানে পাঠান\n"
+        f"অথবা চ্যানেলের ইউজারনেম/লিংক লিখে পাঠান (যেমন: @Sahadot_Reaction_Vip বা https://t.me/...):"
     )
-    await update.message.reply_text(text, parse_mode='Markdown', reply_markup=cancel_keyboard())
+    await update.message.reply_text(text, reply_markup=cancel_keyboard())
     return STEP_CHANNEL
 
 async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -187,49 +185,32 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
-    channel_title = "চ্যানেল"
-    channel_id = None
+    channel_title = "Telegram Channel"
+    channel_id = txt
 
-    # ১. ফরওয়ার্ড মেসেজ থেকে চেষ্টা করা
     if msg.forward_from_chat:
         channel_title = msg.forward_from_chat.title or "Telegram Channel"
         channel_id = str(msg.forward_from_chat.id)
     elif hasattr(msg, 'forward_origin') and msg.forward_origin and hasattr(msg.forward_origin, 'chat'):
         channel_title = msg.forward_origin.chat.title or "Telegram Channel"
         channel_id = str(msg.forward_origin.chat.id)
-
-    # ২. টেক্সট/লিংক ইনপুট ধরে নেওয়া (যেটাই দিক না কেন, প্রসেস সামনে বাড়াবে)
-    if not channel_id and txt:
-        clean_text = txt
-        if "t.me/" in clean_text:
-            match = re.search(r"t\.me/(?:c/)?([^/]+)", clean_text)
-            if match:
-                extracted = match.group(1)
-                clean_text = extracted if extracted.isdigit() else "@" + extracted
-        
-        try:
-            chat = await context.bot.get_chat(clean_text)
-            channel_title = chat.title or clean_text
-            channel_id = str(chat.id)
-        except Exception:
-            # বট কানেক্টেড না থাকলেও অপশন আসবে!
+    elif txt:
+        if "t.me/" in txt:
             channel_title = txt.split("/")[-1]
-            if not channel_title.startswith("@"): channel_title = "@" + channel_title
-            channel_id = clean_text
+        else:
+            channel_title = txt
 
-    # ড্রাফটে সেভ করে রাখা
     context.user_data['draft_project']['channel_name'] = channel_title
     context.user_data['draft_project']['channel_id'] = channel_id
     context.user_data['draft_project']['raw_input'] = txt
 
     confirm_text = (
-        f"✅ **চ্যানেল সাময়িকভাবে গৃহীত হয়েছে!**\n\n"
-        f"📺 **চ্যানেল/লিঙ্ক:** {channel_title}\n"
-        f"📌 *চূড়ান্ত ধাপে 'প্রকল্প তৈরি করুন' এ চাপলে ডাটাবেজে যুক্ত হবে।*"
+        f"✅ চ্যানেল ইনপুট গ্রহণ করা হয়েছে!\n\n"
+        f"📺 চ্যানেল/লিঙ্ক: {channel_title}\n"
+        f"📌 শেষ ধাপে 'প্রকল্প তৈরি করুন' চাপলে ডাটাবেজে যুক্ত হবে।"
     )
-    await msg.reply_text(confirm_text, parse_mode='Markdown')
+    await msg.reply_text(confirm_text)
 
-    # কোনো বাধা ছাড়াই ধাপ ১ (ইমোজি নির্বাচন)-এ নিয়ে যাওয়া
     return await render_emoji_menu(update, context)
 
 # --- Step 1: Emoji Choice ---
@@ -239,11 +220,11 @@ async def render_emoji_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     selected = " ".join(draft.get('emojis', [])) if draft.get('emojis') else "(কোনোটিই নয়)"
     
     text = (
-        f"📝 **ধাপ 1 • ইমোজি নির্বাচন করুন**\n"
+        f"📝 ধাপ 1 • ইমোজি নির্বাচন করুন\n"
         f"───────────────────\n\n"
-        f"📺 **চ্যানেল:** {draft.get('channel_name', 'অজ্ঞাত')}\n"
-        f"👉 **বর্তমান নির্বাচিত ইমোজি:** {selected}\n\n"
-        f"ইমোজি বেছে নিয়ে **'✅ সম্পন্ন'** চাপুন:"
+        f"📺 চ্যানেল: {draft.get('channel_name', 'অজ্ঞাত')}\n"
+        f"👉 বর্তমান নির্বাচিত ইমোজি: {selected}\n\n"
+        f"ইমোজি বেছে নিয়ে '✅ সম্পন্ন' চাপুন:"
     )
     
     keyboard = [
@@ -255,9 +236,9 @@ async def render_emoji_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     
     if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     else:
-        await context.bot.send_message(chat_id=user_id, text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await context.bot.send_message(chat_id=user_id, text=text, reply_markup=InlineKeyboardMarkup(keyboard))
     return STEP_EMOJI
 
 async def emoji_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -282,16 +263,16 @@ async def emoji_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def render_count_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     text = (
-        f"📊 **ধাপ 2 • মোট প্রতিক্রিয়া**\n"
+        f"📊 ধাপ 2 • মোট প্রতিক্রিয়া\n"
         f"───────────────────\n\n"
-        f"👉 **বর্তমান নির্বাচিত সংখ্যা:** {draft.get('count', 20)} রিয়্যাকশন"
+        f"👉 বর্তমান নির্বাচিত সংখ্যা: {draft.get('count', 20)} রিয়্যাকশন"
     )
     keyboard = [
         [InlineKeyboardButton("10", callback_data="cnt_10"), InlineKeyboardButton("20", callback_data="cnt_20"), InlineKeyboardButton("30", callback_data="cnt_30")],
         [InlineKeyboardButton("🔒 50", callback_data="locked"), InlineKeyboardButton("🔒 100", callback_data="locked")],
         [InlineKeyboardButton("↩ ব্যাক", callback_data="back_emoji"), InlineKeyboardButton("চালিয়ে যান ✅", callback_data="cnt_done")]
     ]
-    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     return STEP_COUNT
 
 async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -312,18 +293,18 @@ async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def render_distribution_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     text = (
-        f"⚙️ **ধাপ 3 • বিতরণের ধরন**\n"
+        f"⚙️ ধাপ 3 • বিতরণের ধরন\n"
         f"───────────────────\n\n"
-        f"👉 **বর্তমান পছন্দ:** {draft.get('dist', 'এলোমেলো')}\n\n"
-        f"🎲 **এলোমেলো** - প্রতিটি ইমোজিতে র‍্যান্ডম রিয়্যাকশন\n"
-        f"⚖️ **সকল সমান** - ইমোজিগুলোতে সমান সংখ্যার বিতরণ"
+        f"👉 বর্তমান পছন্দ: {draft.get('dist', 'এলোমেলো')}\n\n"
+        f"🎲 এলোমেলো - প্রতিটি ইমোজিতে র‍্যান্ডম রিয়্যাকশন\n"
+        f"⚖️ সকল সমান - ইমোজিগুলোতে সমান সংখ্যার বিতরণ"
     )
     keyboard = [
         [InlineKeyboardButton("🎲 এলোমেলো", callback_data="dist_এলোমেলো")],
         [InlineKeyboardButton("⚖️ সব সমানভাবে", callback_data="dist_সমান")],
         [InlineKeyboardButton("↩ ব্যাক", callback_data="back_count"), InlineKeyboardButton("চালিয়ে যান ✅", callback_data="dist_done")]
     ]
-    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     return STEP_DISTRIBUTION
 
 async def distribution_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -341,15 +322,15 @@ async def distribution_callback(update: Update, context: ContextTypes.DEFAULT_TY
 async def render_speed_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     text = (
-        f"⚡ **ধাপ 4 • গতি নির্বাচন**\n"
+        f"⚡ ধাপ 4 • গতি নির্বাচন\n"
         f"───────────────────\n\n"
-        f"👉 **বর্তমান নির্বাচিত গতি:** ⚡ {draft.get('speed', 'তাৎক্ষণিক')}"
+        f"👉 বর্তমান নির্বাচিত গতি: ⚡ {draft.get('speed', 'তাৎক্ষণিক')}"
     )
     keyboard = [
         [InlineKeyboardButton("তাৎক্ষণিক", callback_data="spd_তাৎক্ষণিক"), InlineKeyboardButton("ধীর", callback_data="spd_ধীর")],
         [InlineKeyboardButton("↩ ব্যাক", callback_data="back_dist"), InlineKeyboardButton("চালিয়ে যান ✅", callback_data="spd_done")]
     ]
-    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     return STEP_SPEED
 
 async def speed_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -367,15 +348,15 @@ async def speed_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def render_views_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     text = (
-        f"👁 **ধাপ 5 • ভিউ কনফিগারেশন**\n"
+        f"👁 ধাপ 5 • ভিউ কনফিগারেশন\n"
         f"───────────────────\n\n"
-        f"👉 **বর্তমান নির্বাচিত ভিউ:** {draft.get('views', 0)} ভিউ"
+        f"👉 বর্তমান নির্বাচিত ভিউ: {draft.get('views', 0)} ভিউ"
     )
     keyboard = [
         [InlineKeyboardButton("0 ভিউ", callback_data="vw_0"), InlineKeyboardButton("10 ভিউ", callback_data="vw_10"), InlineKeyboardButton("30 ভিউ", callback_data="vw_30")],
         [InlineKeyboardButton("↩ ব্যাক", callback_data="back_speed"), InlineKeyboardButton("চালিয়ে যান ✅", callback_data="vw_done")]
     ]
-    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     return STEP_VIEWS
 
 async def views_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -395,9 +376,9 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
     emojis = " ".join(draft.get('emojis', []))
     
     text = (
-        f"✨ **FINAL REVIEW (চূড়ান্ত পর্যালোচনা)** ✨\n"
+        f"✨ FINAL REVIEW (চূড়ান্ত পর্যালোচনা) ✨\n"
         f"───────────────────\n\n"
-        f"📺 **চ্যানেল:** {draft.get('channel_name')} (`{draft.get('channel_id')}`)\n\n"
+        f"📺 চ্যানেল: {draft.get('channel_name')}\n\n"
         f"┌────────────────────\n"
         f"│ 😊 ইমোজি: {emojis}\n"
         f"│ 🚀 প্রতিক্রিয়া: {draft.get('count')}\n"
@@ -405,13 +386,13 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"│ ⚡ গতি: {draft.get('speed')}\n"
         f"│ ⚙️ বিতরণ: {draft.get('dist')}\n"
         f"└────────────────────\n\n"
-        f"⚠️ **'✅ প্রকল্প তৈরি করুন'** বাটনে চাপ দিলেই ডাটাবেজে সেভ হবে ও চ্যানেলের সাথে কানেক্ট হবে।"
+        f"⚠️ '✅ প্রকল্প তৈরি করুন' বাটনে চাপ দিলেই ডাটাবেজে সেভ হবে ও চ্যানেলের সাথে কানেক্ট হবে।"
     )
     keyboard = [
         [InlineKeyboardButton("✅ প্রকল্প তৈরি করুন", callback_data="create_final")],
         [InlineKeyboardButton("❌ বাতিল করুন", callback_data="cancel_flow")]
     ]
-    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     return STEP_REVIEW
 
 # 💾 Final Save & Database Connection
@@ -426,13 +407,12 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("❌ কোনো তথ্য পাওয়া যায়নি! নতুন করে চেষ্টা করুন।", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
-    # 'প্রকল্প তৈরি করুন' এ ক্লিক করার পরই চ্যানেল আইডি কনফার্ম করা
+    raw_inp = draft.get('raw_input') or draft.get('channel_id')
     final_channel_id = draft.get('channel_id')
     final_channel_name = draft.get('channel_name')
 
-    # টেলিগ্রাম থেকে সঠিক আইডি বের করার শেষ চেষ্টা
     try:
-        chat_info = await context.bot.get_chat(draft.get('raw_input') or final_channel_id)
+        chat_info = await context.bot.get_chat(raw_inp)
         final_channel_id = str(chat_info.id)
         final_channel_name = chat_info.title or final_channel_name
     except Exception:
@@ -441,23 +421,20 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft['channel_id'] = final_channel_id
     draft['channel_name'] = final_channel_name
 
-    # একই চ্যানেলের আগের প্রজেক্ট থাকলে রিপ্লেস করা
     u_data['projects'] = [p for p in u_data.get('projects', []) if str(p.get('channel_id')) != str(final_channel_id)]
-
-    # 💾 এখানেই ডাটাবেজে কানেক্ট ও সেভ হচ্ছে
     u_data['projects'].append(draft)
     save_data(db)
 
     context.user_data.pop('draft_project', None)
 
     await query.message.reply_text(
-        f"🎉 **প্রকল্প সফলভাবে তৈরি ও ডাটাবেজে সেভ হয়েছে!**\n\n"
-        f"📁 **চ্যানেল:** {final_channel_name}\n"
-        f"🆔 **আইডি:** `{final_channel_id}`\n"
-        f"😊 **ইমোজি:** {' '.join(draft['emojis'])}\n"
-        f"🚀 **প্রতিক্রিয়া:** {draft['count']}\n\n"
-        f"এখন চ্যানেলে নতুন পোস্ট করার সাথে সাথে অটো রিয়্যাকশন কানেক্ট হয়ে যাবে।",
-        reply_markup=get_user_keyboard(), parse_mode='Markdown'
+        f"🎉 প্রকল্প সফলভাবে তৈরি ও ডাটাবেজে সেভ হয়েছে!\n\n"
+        f"📁 চ্যানেল: {final_channel_name}\n"
+        f"🆔 আইডি: {final_channel_id}\n"
+        f"😊 ইমোজি: {' '.join(draft['emojis'])}\n"
+        f"🚀 প্রতিক্রিয়া: {draft['count']}\n\n"
+        f"এখন চ্যানেলে নতুন পোস্ট করার সাথে সাথে অটো রিয়্যাকশন চলে যাবে।",
+        reply_markup=get_user_keyboard()
     )
     return ConversationHandler.END
 
@@ -472,7 +449,7 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # 👑 Admin Actions
 async def start_add_credit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
-    await update.message.reply_text("➕ **ক্রেডিট দিতে লিখে পাঠান:** `User_ID Amount`\nযেমন: `7973059882 100`", parse_mode='Markdown')
+    await update.message.reply_text("➕ ক্রেডিট দিতে লিখে পাঠান: User_ID Amount\nযেমন: 7973059882 100")
     return STEP_ADMIN_ADD_CREDIT
 
 async def process_admin_credit(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -482,7 +459,7 @@ async def process_admin_credit(update: Update, context: ContextTypes.DEFAULT_TYP
         if target_id in db['users']:
             db['users'][target_id]['credit'] += amount
             save_data(db)
-            await update.message.reply_text(f"✅ ইউজার `{target_id}` এর বর্তমান ক্রেডিট: {db['users'][target_id]['credit']}", parse_mode='Markdown', reply_markup=get_admin_keyboard())
+            await update.message.reply_text(f"✅ ইউজার {target_id} এর বর্তমান ক্রেডিট: {db['users'][target_id]['credit']}", reply_markup=get_admin_keyboard())
         else:
             await update.message.reply_text("❌ আইডি পাওয়া যায়নি!", reply_markup=get_admin_keyboard())
     except Exception as e:
@@ -491,7 +468,7 @@ async def process_admin_credit(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def start_block_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
-    await update.message.reply_text("🚫 **ব্লক করতে আইডি লিখে পাঠান:**", parse_mode='Markdown')
+    await update.message.reply_text("🚫 ব্লক করতে আইডি লিখে পাঠান:")
     return STEP_ADMIN_BLOCK_USER
 
 async def process_admin_block(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -499,14 +476,14 @@ async def process_admin_block(update: Update, context: ContextTypes.DEFAULT_TYPE
     if target_id not in db['blocked']:
         db['blocked'].append(target_id)
         save_data(db)
-        await update.message.reply_text(f"🚫 ইউজার `{target_id}` কে ব্লক করা হয়েছে।", parse_mode='Markdown', reply_markup=get_admin_keyboard())
+        await update.message.reply_text(f"🚫 ইউজার {target_id} কে ব্লক করা হয়েছে।", reply_markup=get_admin_keyboard())
     else:
         await update.message.reply_text("⚠️ ইউজার আগের থেকেই ব্লকড!", reply_markup=get_admin_keyboard())
     return ConversationHandler.END
 
 async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
-    await update.message.reply_text("📢 **ব্রডকাস্ট করার মেসেজটি পাঠোন:**", parse_mode='Markdown')
+    await update.message.reply_text("📢 ব্রডকাস্ট করার মেসেজটি পাঠোন:")
     return STEP_ADMIN_BROADCAST
 
 async def process_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -514,11 +491,11 @@ async def process_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_
     count = 0
     for uid in db['users']:
         try:
-            await context.bot.send_message(chat_id=int(uid), text=f"📢 **বিজ্ঞপ্তি:**\n\n{msg_text}", parse_mode='Markdown')
+            await context.bot.send_message(chat_id=int(uid), text=f"📢 বিজ্ঞপ্তি:\n\n{msg_text}")
             count += 1
         except Exception:
             pass
-    await update.message.reply_text(f"🎉 মোট `{count}` জন ইউজারের কাছে মেসেজ চলে গেছে!", parse_mode='Markdown', reply_markup=get_admin_keyboard())
+    await update.message.reply_text(f"🎉 মোট {count} জন ইউজারের কাছে মেসেজ চলে গেছে!", reply_markup=get_admin_keyboard())
     return ConversationHandler.END
 
 # ⚡ Auto Reaction Trigger on Channel Post
@@ -538,8 +515,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                             inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 রিচার্জ করুন", url=f"https://t.me/{clean_admin}")]])
                             await context.bot.send_message(
                                 chat_id=int(uid),
-                                text=f"⚠️ **ক্রেডিট শেষ!**\nআপনার `{proj['channel_name']}` চ্যানেলে রিয়্যাকশন পাঠানোর পর্যাপ্ত ক্রেডিট নেই।",
-                                parse_mode='Markdown',
+                                text=f"⚠️ ক্রেডিট শেষ!\nআপনার {proj['channel_name']} চ্যানেলে রিয়্যাকশন পাঠানোর পর্যাপ্ত ক্রেডিট নেই।",
                                 reply_markup=inline_kb
                             )
                         except Exception:
@@ -575,29 +551,29 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text == "📊 বট স্ট্যাটাস":
             return await admin_panel_command(update, context)
         elif text == "📋 ইউজার লিস্ট":
-            u_list = "📋 **ইউজার তালিকা:**\n───────────────────\n"
+            u_list = "📋 ইউজার তালিকা:\n───────────────────\n"
             for uid, uinfo in list(db['users'].items())[:15]:
-                u_list += f"🆔 `{uid}` | 💎 ক্রেডিট: {uinfo.get('credit', 0)}\n"
-            return await update.message.reply_text(u_list, parse_mode='Markdown', reply_markup=get_admin_keyboard())
+                u_list += f"🆔 {uid} | 💎 ক্রেডিট: {uinfo.get('credit', 0)}\n"
+            return await update.message.reply_text(u_list, reply_markup=get_admin_keyboard())
         elif text == "🏠 প্রধান মেনু":
             return await update.message.reply_text("🏠 প্রধান মেনু:", reply_markup=get_user_keyboard())
 
     if text == "⚙️ আরও":
-        await update.message.reply_text("⚙️ **অতিরিক্ত অপশনসমূহ:**\nনিচের অপশনগুলো থেকে বেছে নিন:", reply_markup=get_more_keyboard())
+        await update.message.reply_text("⚙️ অতিরিক্ত অপশনসমূহ:\nনিচের অপশনগুলো থেকে বেছে নিন:", reply_markup=get_more_keyboard())
 
     elif text == "🔙 ব্যাক":
-        await update.message.reply_text("🏠 **প্রধান মেনু:**", reply_markup=get_user_keyboard())
+        await update.message.reply_text("🏠 প্রধান মেনু:", reply_markup=get_user_keyboard())
 
     elif text == "👤 প্রোফাইল":
         profile_text = (
-            f"👤 **ইউজার প্রোফাইল**\n───────────────────\n"
-            f"🆔 **আইডি:** `{str_id}`\n"
-            f"💎 **ক্রেডিট:** `{u_data['credit']}`\n"
-            f"📁 **প্রকল্প সংখ্যা:** `{len(u_data['projects'])}`\n"
-            f"👥 **মোট রেফার:** `{u_data['ref_count']}`\n"
-            f"💰 **রেফার আয়:** `{u_data['ref_credit']}` ক্রেডিট"
+            f"👤 ইউজার প্রোফাইল\n───────────────────\n"
+            f"🆔 আইডি: {str_id}\n"
+            f"💎 ক্রেডিট: {u_data['credit']}\n"
+            f"📁 প্রকল্প সংখ্যা: {len(u_data['projects'])}\n"
+            f"👥 মোট রেফার: {u_data['ref_count']}\n"
+            f"💰 রেফার আয়: {u_data['ref_credit']} ক্রেডিট"
         )
-        await update.message.reply_text(profile_text, parse_mode='Markdown')
+        await update.message.reply_text(profile_text)
 
     elif text == "🎁 দৈনিক বোনাস":
         today = datetime.now().strftime("%Y-%m-%d")
@@ -607,40 +583,40 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             u_data["credit"] += 10
             u_data["last_daily_bonus"] = today
             save_data(db)
-            await update.message.reply_text(f"🎉 **দৈনিক বোনাস সফল!**\n\nআপনি ১০ ফ্রি ক্রেডিট পেয়েছেন।\nবর্তমান ক্রেডিট: `{u_data['credit']}`", parse_mode='Markdown')
+            await update.message.reply_text(f"🎉 দৈনিক বোনাস সফল!\n\nআপনি ১০ ফ্রি ক্রেডিট পেয়েছেন।\nবর্তমান ক্রেডিট: {u_data['credit']}")
 
     elif text == "🔗 রেফারেল লিংক":
         ref_link = f"https://t.me/{BOT_USERNAME}?start={str_id}"
         refer_text = (
-            f"🔗 **রেফারেল প্রোগ্রাম**\n───────────────────\n"
-            f"আপনার বন্ধুদের রেফারেল লিংক ব্যবহার করে যুক্ত হতে বলুন এবং প্রতি সফল রেফারে **২০ ফ্রি ক্রেডিট** পান!\n\n"
-            f"📌 **আপনার লিঙ্ক:**\n`{ref_link}`"
+            f"🔗 রেফারেল প্রোগ্রাম\n───────────────────\n"
+            f"আপনার বন্ধুদের রেফারেল লিংক ব্যবহার করে যুক্ত হতে বলুন এবং প্রতি সফল রেফারে ২০ ফ্রি ক্রেডিট পান!\n\n"
+            f"📌 আপনার লিঙ্ক:\n{ref_link}"
         )
-        await update.message.reply_text(refer_text, parse_mode='Markdown')
+        await update.message.reply_text(refer_text)
 
     elif text == "🆘 সহায়তা":
         clean_admin = ADMIN_USERNAME.replace("@", "")
         inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 অ্যাডমিনকে মেসেজ দিন", url=f"https://t.me/{clean_admin}")]])
-        await update.message.reply_text(f"🆘 **সহায়তা ও সাপোর্ট**\n───────────────────\nআপনার কোনো প্রশ্ন থাকলে সরাসরি আমাদের অ্যাডমিনের সাথে যোগাযোগ করুন।", parse_mode='Markdown', reply_markup=inline_kb)
+        await update.message.reply_text(f"🆘 সহায়তা ও সাপোর্ট\n───────────────────\nআপনার কোনো প্রশ্ন থাকলে সরাসরি আমাদের অ্যাডমিনের সাথে যোগাযোগ করুন।", reply_markup=inline_kb)
 
     elif text == "🌟 পরিকল্পনা এবং ভারসাম্য":
         p_count = len(u_data.get('projects', []))
-        await update.message.reply_text(f"💎 **বর্তমান ক্রেডিট:** {u_data['credit']}\n📁 **সক্রিয় প্রকল্প:** {p_count}", parse_mode='Markdown')
+        await update.message.reply_text(f"💎 বর্তমান ক্রেডিট: {u_data['credit']}\n📁 সক্রিয় প্রকল্প: {p_count}")
     
     elif text == "📁 আমার প্রকল্প":
         projects = u_data.get('projects', [])
         if projects:
-            p_text = "📁 **আপনার সেভ করা প্রকল্পসমূহ:**\n───────────────────\n"
+            p_text = "📁 আপনার সেভ করা প্রকল্পসমূহ:\n───────────────────\n"
             for idx, p in enumerate(projects, 1):
-                p_text += f"{idx}. **{p['channel_name']}**\nইমোজি: {' '.join(p['emojis'])}\nরিঅ্যাকশন: {p['count']}\n\n"
-            await update.message.reply_text(p_text, parse_mode='Markdown')
+                p_text += f"{idx}. {p['channel_name']}\nইমোজি: {' '.join(p['emojis'])}\nরিঅ্যাকশন: {p['count']}\n\n"
+            await update.message.reply_text(p_text)
         else:
             await update.message.reply_text("❌ আপনার কোনো সেভ করা প্রকল্প নেই।")
 
     elif text == "💰 রিচার্জ করুন":
         clean_admin = ADMIN_USERNAME.replace("@", "")
         inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 অ্যাডমিনকে মেসেজ দিন", url=f"https://t.me/{clean_admin}")]])
-        await update.message.reply_text(f"💳 **রিচার্জ করতে অ্যাডমিনের সাথে যোগাযোগ করুন:**\n\n🆔 আপনার আইডি: `{str_id}`", parse_mode='Markdown', reply_markup=inline_kb)
+        await update.message.reply_text(f"💳 রিচার্জ করতে অ্যাডমিনের সাথে যোগাযোগ করুন:\n\n🆔 আপনার আইডি: {str_id}", reply_markup=inline_kb)
 
 if __name__ == '__main__':
     keep_alive()
