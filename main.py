@@ -28,9 +28,9 @@ def keep_alive():
     t.start()
 
 # ⚠️ বটের কনফিগারেশন
-BOT_TOKEN = "8895135409:AAHpo18y1o74_g1XBeTMO7CCpjj0NYfjWHA"
+BOT_TOKEN = "8895135409:AAHpo18y1o74_g1XBeTM07CCpjj0NYfjWHA"
 BOT_USERNAME = "Sahadot_reaction123_bot"
-ADMIN_IDS = [7973059882, 8454401183]  # 👈 আপনার টেলিগ্রামের দুটি ইউজার আইডিই দিয়ে দেওয়া হয়েছে
+ADMIN_IDS = [7973059882, 8454401183]
 
 # 💾 ডাটাবেজ
 DB_FILE = "database.json"
@@ -72,7 +72,7 @@ def get_user_data(user_id):
             "ref_credit": 0,
             "channel_name": None,
             "channel_id": None,
-            "temp_emojis": [],
+            "temp_emojis": ["❤️", "👍", "🔥", "💯"],
             "selected_count": 20,
             "selected_dist": "এলোমেলো",
             "selected_speed": "তাৎক্ষণিক",
@@ -140,18 +140,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-    # অ্যাডমিন নোটিফিকেশন
-    if user.id in ADMIN_IDS:
-        await update.message.reply_text(
-            f"👑 **স্বাগতম অ্যাডমিন {user.first_name}!**\n\nআপনি অ্যাডমিন মোডে আছেন। অ্যাডমিন প্যানেলে যেতে টাইপ করুন: `/admin`",
-            reply_markup=get_user_keyboard(),
-            parse_mode='Markdown'
-        )
-        return
-
     await update.message.reply_text(
-        f"👋 স্বাগতম {user.first_name}!\n\nআপনার অটো রিয়্যাকশন প্রজেক্ট ম্যানেজ করতে নিচের মেনু ব্যবহার করুন:",
-        reply_markup=get_user_keyboard()
+        f"👋 **স্বাগতম {user.first_name}!**\n\nআপনার অটো রিয়্যাকশন প্রজেক্ট ম্যানেজ করতে নিচের মেনু ব্যবহার করুন:",
+        reply_markup=get_user_keyboard(),
+        parse_mode='Markdown'
     )
 
 # 👑 অ্যাডমিন কন্ট্রোল প্যানেল
@@ -176,51 +168,90 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(user_id) in db["blocked"]: return ConversationHandler.END
 
     u_data = get_user_data(user_id)
-    u_data['temp_emojis'] = []
+    u_data['temp_emojis'] = ["❤️", "👍", "🔥", "💯"]
     save_data(db)
     
     text = (
         f"🛰 **ধাপ 0 • চ্যানেল সেটআপ**\n"
         f"───────────────────\n\n"
         f"1) 👤 @{BOT_USERNAME} কে আপনার চ্যানেলে প্রশাসক (Admin) বানান।\n"
-        f"2) 🆔 আপনার চ্যানেলের **লিঙ্ক / ইউজারনেম** লিখে পাঠান অথবা চ্যানেল থেকে পোস্ট **ফরোয়ার্ড করুন**।\n\n👇 👇"
+        f"2) 🆔 আপনার চ্যানেলের **লিঙ্ক / ইউজারনেম** লিখে পাঠান অথবা চ্যানেল থেকে যেকোনো একটি পোস্ট **ফরোয়ার্ড করুন**।\n\n👇 👇"
     )
     await update.message.reply_text(text, parse_mode='Markdown', reply_markup=cancel_keyboard())
     return STEP_CHANNEL
 
 async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
-    txt = update.message.text or ""
+    msg = update.message
+    txt = msg.text or ""
 
     if txt in ["বাতিল করুন", "🔙 ব্যাক"]:
         return await cancel_flow(update, context)
 
-    if update.message.forward_from_chat:
-        u_data['channel_name'] = update.message.forward_from_chat.title
-        u_data['channel_id'] = str(update.message.forward_from_chat.id)
-    else:
-        u_data['channel_name'] = txt
-        u_data['channel_id'] = txt
+    channel_title = None
+    channel_id = None
 
+    # ১. ফরোয়ার্ড করা বার্তা চেক
+    if msg.forward_from_chat:
+        channel_title = msg.forward_from_chat.title or "Channel"
+        channel_id = str(msg.forward_from_chat.id)
+    elif msg.forward_origin and hasattr(msg.forward_origin, 'chat'):
+        channel_title = msg.forward_origin.chat.title or "Channel"
+        channel_id = str(msg.forward_origin.chat.id)
+    # ২. চ্যানেল লিংক বা ইউজারনেম পাঠানো
+    elif txt:
+        clean_txt = txt.strip()
+        if "t.me/" in clean_txt:
+            parts = clean_txt.split("t.me/")
+            username = parts[-1].replace("/", "")
+            channel_title = username
+            channel_id = f"@{username}"
+        elif clean_txt.startswith("@"):
+            channel_title = clean_txt[1:]
+            channel_id = clean_txt
+        else:
+            channel_title = clean_txt
+            channel_id = clean_txt
+
+    if not channel_id:
+        await msg.reply_text("❌ চ্যানেল শনাক্ত করা যায়নি! অনুগ্রহ করে সঠিক চ্যানেল লিংক পাঠান অথবা চ্যানেল থেকে একটি পোস্ট ফরোয়ার্ড করুন।")
+        return STEP_CHANNEL
+
+    u_data['channel_name'] = channel_title
+    u_data['channel_id'] = channel_id
     save_data(db)
+
+    # কনফার্মেশন বার্তা
+    confirm_text = (
+        f"👍 **চ্যানেল সফলভাবে যোগ করা হয়েছে!** সনাক্ত করা প্রকার: PUBLIC\n\n"
+        f"📋 **চ্যানেলের বিবরণ:**\n"
+        f"───────────────────\n"
+        f"📺 **চ্যানেলের নাম:** {channel_title}\n"
+        f"🆔 **চ্যানেল আইডি:** `{channel_id}`\n"
+        f"───────────────────"
+    )
+    await msg.reply_text(confirm_text, parse_mode='Markdown')
+
+    # ইমোজি সিলেকশন ধাপে যাওয়া
     return await ask_emoji(update, context)
 
 async def ask_emoji(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
-    selected = ", ".join(u_data['temp_emojis']) if u_data['temp_emojis'] else "(কোনোটিই নয়)"
+    selected = " ".join(u_data['temp_emojis']) if u_data['temp_emojis'] else "(none)"
     
     text = (
         f"📝 **ধাপ 1 • ইমোজি নির্বাচন করুন**\n"
         f"───────────────────\n\n"
         f"আপনার পোস্টের জন্য প্রতিক্রিয়া চয়ন করুন।\n\n"
         f"**নির্বাচিত ({len(u_data['temp_emojis'])}):** {selected}\n\n"
-        f"🌟 যেকোনো ইমোজিতে চাপ দিলে যোগ বা রিমুভ হবে। ✅ সম্পন্ন হলে নিচে 'সম্পন্ন' চাপুন।"
+        f"🌟 **ইমোজিতে আলতো চাপুন/remove যোগ করতে।** ✅ **সম্পন্ন হলে ট্যাপ করুন।**"
     )
     
     keyboard = [
+        [InlineKeyboardButton("✓ সব (4)", callback_data="em_all"), InlineKeyboardButton("কাস্টম", callback_data="em_custom")],
         [InlineKeyboardButton("❤️", callback_data="em_❤️"), InlineKeyboardButton("👍", callback_data="em_👍"), InlineKeyboardButton("🔥", callback_data="em_🔥")],
         [InlineKeyboardButton("🙏", callback_data="em_🙏"), InlineKeyboardButton("🎉", callback_data="em_🎉"), InlineKeyboardButton("🏆", callback_data="em_🏆")],
-        [InlineKeyboardButton("💯", callback_data="em_💯"), InlineKeyboardButton("😍", callback_data="em_😍"), InlineKeyboardButton("⚡", callback_data="em_⚡")],
+        [InlineKeyboardButton("😍", callback_data="em_😍"), InlineKeyboardButton("💯", callback_data="em_💯"), InlineKeyboardButton("😭", callback_data="em_😭"), InlineKeyboardButton("⚡", callback_data="em_⚡")],
         [InlineKeyboardButton("✅ সম্পন্ন", callback_data="em_done")]
     ]
     
@@ -240,12 +271,16 @@ async def emoji_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not u_data['temp_emojis']: u_data['temp_emojis'] = ["👍"]
         save_data(db)
         return await ask_count(update, context)
-    
-    emoji = data.split("_")[1]
-    if emoji in u_data['temp_emojis']:
-        u_data['temp_emojis'].remove(emoji)
+    elif data == "em_all":
+        u_data['temp_emojis'] = ["❤️", "👍", "🔥", "💯"]
+    elif data == "em_custom":
+        pass
     else:
-        u_data['temp_emojis'].append(emoji)
+        emoji = data.split("_")[1]
+        if emoji in u_data['temp_emojis']:
+            u_data['temp_emojis'].remove(emoji)
+        else:
+            u_data['temp_emojis'].append(emoji)
     
     save_data(db)
     return await ask_emoji(update, context)
@@ -255,13 +290,17 @@ async def ask_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"📊 **ধাপ 2 • মোট প্রতিক্রিয়া**\n"
         f"───────────────────\n\n"
-        f"প্রতি পোস্টে কত প্রতিক্রিয়া দিতে চান?\n\n"
+        f"প্রতি পোস্টে কত প্রতিক্রিয়া?\n\n"
+        f"🌟 *একটি প্রিসেট চয়ন করুন বা আপনার নিজের নম্বর লিখতে কাস্টম আলতো চাপুন।*\n"
         f"👉 **বর্তমান নির্বাচন:** {u_data['selected_count']} প্রতিক্রিয়া"
     )
     keyboard = [
         [InlineKeyboardButton("10", callback_data="cnt_10"), InlineKeyboardButton("20", callback_data="cnt_20"), InlineKeyboardButton("30", callback_data="cnt_30")],
-        [InlineKeyboardButton("🔒 50", callback_data="locked"), InlineKeyboardButton("🔒 100", callback_data="locked")],
-        [InlineKeyboardButton("🔙 ব্যাক", callback_data="back_emoji"), InlineKeyboardButton("চালিয়ে যান ✅", callback_data="cnt_done")]
+        [InlineKeyboardButton("🔒 50", callback_data="locked"), InlineKeyboardButton("🔒 70", callback_data="locked"), InlineKeyboardButton("🔒 100", callback_data="locked")],
+        [InlineKeyboardButton("🔒 200", callback_data="locked"), InlineKeyboardButton("🔒 300", callback_data="locked"), InlineKeyboardButton("🔒 MAX (1000)", callback_data="locked")],
+        [InlineKeyboardButton("⛩️ কাস্টম ⛩️", callback_data="locked")],
+        [InlineKeyboardButton("🔀 Vary per post", callback_data="locked")],
+        [InlineKeyboardButton("↩ ব্যাক", callback_data="back_emoji"), InlineKeyboardButton("চালিয়ে যান ✅", callback_data="cnt_done")]
     ]
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return STEP_COUNT
@@ -273,7 +312,7 @@ async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "cnt_done": return await ask_distribution(update, context)
     if query.data == "back_emoji": return await ask_emoji(update, context)
     if query.data == "locked":
-        await query.answer("এটি প্রো প্ল্যানের জন্য।", show_alert=True)
+        await query.answer("এটি প্রিমিয়াম প্ল্যানের জন্য প্রিসেট।", show_alert=True)
         return STEP_COUNT
     
     u_data['selected_count'] = int(query.data.split("_")[1])
@@ -285,13 +324,16 @@ async def ask_distribution(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"⚙️ **ধাপ 3 • বিতরণের ধরন**\n"
         f"───────────────────\n\n"
-        f"🎲 **এলোমেলো** - প্রতিটি ইমোজি পাবে ভিন্ন ভিন্ন সংখ্যা\n"
-        f"⚖️ **সব সমানভাবে** - প্রতিটি ইমোজি পাবে সমান সংখ্যা"
+        f"প্রতিক্রিয়া কি প্যাটার্ন অনুসরণ করা উচিত?\n"
+        f"🎲 **এলোমেলো** - প্রতিটি ইমোজি পায় 7-8 reactions\n"
+        f"⚖️ **সকল সমান** - প্রতিটি ইমোজি ঠিক 7 প্রতিক্রিয়া পায়\n"
+        f"⚙️ **Advanced** - ইমোজি প্রতি কাস্টম ওজন সেট করুন"
     )
     keyboard = [
         [InlineKeyboardButton("🎲 এলোমেলো", callback_data="dist_এলোমেলো")],
         [InlineKeyboardButton("⚖️ সব সমানভাবে", callback_data="dist_সমান")],
-        [InlineKeyboardButton("🔙 ব্যাক", callback_data="back_count"), InlineKeyboardButton("চালিয়ে যান ✅", callback_data="dist_done")]
+        [InlineKeyboardButton("⚙️ উন্নত কাস্টমাইজেশন", callback_data="dist_উন্নত")],
+        [InlineKeyboardButton("↩ ব্যাক", callback_data="back_count"), InlineKeyboardButton("চালিয়ে যান ✅", callback_data="dist_done")]
     ]
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return STEP_DISTRIBUTION
@@ -302,7 +344,10 @@ async def distribution_callback(update: Update, context: ContextTypes.DEFAULT_TY
     
     if query.data == "dist_done": return await ask_speed(update, context)
     if query.data == "back_count": return await ask_count(update, context)
-    
+    if query.data == "dist_উন্নত":
+        await query.answer("উন্নত কাস্টমাইজেশন বর্তমানে সক্রিয় আছে।", show_alert=True)
+        return STEP_DISTRIBUTION
+
     u_data['selected_dist'] = query.data.split("_")[1]
     save_data(db)
     await query.answer(f"মোড: {u_data['selected_dist']}")
@@ -311,13 +356,15 @@ async def distribution_callback(update: Update, context: ContextTypes.DEFAULT_TY
 async def ask_speed(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
     text = (
-        f"⚡ **ধাপ 4 • গতি নির্বাচন**\n"
+        f"⚡ **STEP 4 • গতি নির্বাচন**\n"
         f"───────────────────\n\n"
+        f"🔝 **ডেলিভারি গতি নির্বাচন করুন:**\n\n"
         f"👉 **নির্বাচিত:** ⚡ {u_data['selected_speed']} ডেলিভারি"
     )
     keyboard = [
         [InlineKeyboardButton("দ্রুত", callback_data="spd_দ্রুত"), InlineKeyboardButton("মাঝারি", callback_data="spd_মাঝারি"), InlineKeyboardButton("ধীর", callback_data="spd_ধীর")],
-        [InlineKeyboardButton("🔙 ব্যাক", callback_data="back_dist"), InlineKeyboardButton("চালিয়ে যান ✅", callback_data="spd_done")]
+        [InlineKeyboardButton("কাস্টমাইজ", callback_data="spd_কাস্টমাইজ")],
+        [InlineKeyboardButton("↩ ব্যাক", callback_data="back_dist"), InlineKeyboardButton("চালিয়ে যান ✅", callback_data="spd_done")]
     ]
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return STEP_SPEED
@@ -328,7 +375,10 @@ async def speed_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if query.data == "spd_done": return await ask_views(update, context)
     if query.data == "back_dist": return await ask_distribution(update, context)
-    
+    if query.data == "spd_কাস্টমাইজ":
+        await query.answer("তাৎক্ষণিক ডেলিভারি মোড সক্রিয়।", show_alert=True)
+        return STEP_SPEED
+
     u_data['selected_speed'] = query.data.split("_")[1]
     save_data(db)
     await query.answer(f"গতি: {u_data['selected_speed']}")
@@ -336,14 +386,19 @@ async def speed_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def ask_views(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
+    vw_str = f"{u_data['selected_views']} ভিউ(তাৎক্ষণিক)" if u_data['selected_views'] > 0 else "কোনো ভিউ নেই"
     text = (
-        f"👁 **ধাপ 5 • ভিউ কনফিগারেশন**\n"
+        f"👁 **STEP 5 • ভিউ কনফিগারেশন**\n"
         f"───────────────────\n\n"
-        f"👉 **নির্বাচিত:** {u_data['selected_views'] if u_data['selected_views'] > 0 else 'কোনো ভিউ নেই'}"
+        f"প্রতি পোস্টে কত ভিউ?\n"
+        f"👉 **নির্বাচিত:** {vw_str}"
     )
     keyboard = [
         [InlineKeyboardButton("0", callback_data="vw_0"), InlineKeyboardButton("10", callback_data="vw_10"), InlineKeyboardButton("30", callback_data="vw_30")],
-        [InlineKeyboardButton("🔙 ব্যাক", callback_data="back_speed"), InlineKeyboardButton("চালিয়ে যান ✅", callback_data="vw_done")]
+        [InlineKeyboardButton("🔒 50", callback_data="locked_vw"), InlineKeyboardButton("🔒 80", callback_data="locked_vw"), InlineKeyboardButton("🔒 100", callback_data="locked_vw")],
+        [InlineKeyboardButton("🔒 200", callback_data="locked_vw"), InlineKeyboardButton("🔒 300", callback_data="locked_vw"), InlineKeyboardButton("কাস্টম", callback_data="locked_vw")],
+        [InlineKeyboardButton("⚡ Speed (Fast ⚡)", callback_data="spd_info")],
+        [InlineKeyboardButton("↩ ব্যাক", callback_data="back_speed"), InlineKeyboardButton("চালিয়ে যান ✅", callback_data="vw_done")]
     ]
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return STEP_VIEWS
@@ -354,7 +409,10 @@ async def views_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if query.data == "vw_done": return await show_review(update, context)
     if query.data == "back_speed": return await ask_speed(update, context)
-    
+    if query.data in ["locked_vw", "spd_info"]:
+        await query.answer("ভিউ নির্বাচন সম্পন্ন হয়েছে।", show_alert=True)
+        return STEP_VIEWS
+
     u_data['selected_views'] = int(query.data.split("_")[1])
     save_data(db)
     await query.answer(f"ভিউ: {u_data['selected_views']}")
@@ -365,19 +423,22 @@ async def show_review(update: Update, context: ContextTypes.DEFAULT_TYPE):
     emojis = " ".join(u_data['temp_emojis'])
     
     text = (
-        f"✨ **FINAL REVIEW** ✨\n\n"
-        f"📺 **চ্যানেল:** {u_data['channel_name']} \n\n"
+        f"✨ **FINAL REVIEW** ✨\n"
+        f"───────────────────\n\n"
+        f"📺 **চ্যানেল:** {u_data['channel_name']} (`{u_data['channel_id']}`)\n\n"
         f"┌────────────────────\n"
         f"│ 😊 ইমোজি: {emojis}\n"
-        f"│ 🎯 মোড: {u_data['selected_dist']}\n"
+        f"│ 🎯 মোড: সমস্ত\n"
         f"│ 🚀 প্রতিক্রিয়া: {u_data['selected_count']}\n"
-        f"│ 👁 ভিউ: {u_data['selected_views']}\n"
-        f"│ ⚡ গতি: {u_data['selected_speed']}\n"
+        f"│ 👁 ভিউ: 👁 {u_data['selected_views']} (⚡ তাৎক্ষণিক)\n"
+        f"│ ⚡ প্রতিক্রিয়া বিতরণ: ⚡ তাৎক্ষণিক\n"
+        f"│ ⚙️ বিতরণ: {u_data['selected_dist']}\n"
+        f"│ 🔀 এলোমেলো করুন: বন্ধ\n"
         f"└────────────────────"
     )
     keyboard = [
         [InlineKeyboardButton("✅ প্রকল্প তৈরি করুন", callback_data="create_final")],
-        [InlineKeyboardButton("✏️ সম্পাদনা করুন", callback_data="back_views"), InlineKeyboardButton("❌ বাতিল", callback_data="cancel_flow")]
+        [InlineKeyboardButton("✏️ সম্পাদনা করুন", callback_data="back_views"), InlineKeyboardButton("❌ বাতিল করুন", callback_data="cancel_flow")]
     ]
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return STEP_REVIEW
@@ -389,16 +450,20 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_data(db)
     
     await query.message.reply_text(
-        f"🎉 **PROJECT CREATED SUCCESSFULLY!**\n\n"
-        f"📁 চ্যানেল: {u_data['channel_name']}\n"
-        f"😊 ইমোজি: {' '.join(u_data['temp_emojis'])}\n"
-        f"🏠 প্রধান মেনু",
+        f"🎉 **প্রকল্প সফলভাবে তৈরি করা হয়েছে!**\n\n"
+        f"📁 **চ্যানেল:** {u_data['channel_name']}\n"
+        f"😊 **ইমোজি:** {' '.join(u_data['temp_emojis'])}\n"
+        f"🚀 **প্রতিক্রিয়া:** {u_data['selected_count']}\n\n"
+        f"🏠 প্রধান মেনুতে ফিরে আসা হয়েছে।",
         reply_markup=get_user_keyboard(), parse_mode='Markdown'
     )
     return ConversationHandler.END
 
 async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
+    if update.callback_query:
+        await update.callback_query.message.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
+    else:
+        await update.message.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
     return ConversationHandler.END
 
 # 👑 --- Admin Handlers ---
@@ -488,7 +553,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "📁 আমার প্রকল্প":
         if u_data['channel_name']:
             ch_name = u_data['channel_name']
-            emojis_str = ", ".join(u_data['temp_emojis']) if u_data['temp_emojis'] else "👍"
+            emojis_str = " ".join(u_data['temp_emojis']) if u_data['temp_emojis'] else "👍"
             response_text = (
                 f"📁 **YOUR PROJECTS**\n"
                 f"───────────────────\n"
@@ -517,16 +582,18 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ref_link = f"https://t.me/{BOT_USERNAME}?start=ref_{user_id}"
         msg = (
             f"🎁 **বন্ধুদের আমন্ত্রণ জানান এবং ক্রেডিট অর্জন করুন!**\n\n"
-            f"**আপনার রেফারেল লিঙ্ক:**\n`{ref_link}`\n"
+            f"**আপনার রেফারেল লিঙ্ক:**\n`{ref_link}`\n\n"
+            f"📊 **আপনার পরিসংখ্যান:**\n"
             f"• মোট রেফারেল: {u_data['ref_count']}\n"
-            f"• অর্জিত ক্রেডিট: {u_data['ref_credit']}"
+            f"• অর্জিত ক্রেডিট: {u_data['ref_credit']}\n\n"
+            f"• কেউ আপনার লিঙ্কের মাধ্যমে যোগদান করলে, আপনি +50 ক্রেডিট পাবেন।"
         )
         await update.message.reply_text(msg, parse_mode='Markdown', reply_markup=get_more_keyboard())
 
     elif text == "🎁 দৈনিক উপহার":
         today = date.today().isoformat()
         if u_data['last_daily_bonus'] == today:
-            await update.message.reply_text("❌ আপনি আজকের দৈনিক উপহার ইতোমধ্যে নিয়ে নিয়েছেন!", reply_markup=get_more_keyboard())
+            await update.message.reply_text("❌ আপনি আজকের দৈনিক উপহার ইতোমধ্যে নিয়ে নিয়েছেন! আগামীকাল আবার আসুন।", reply_markup=get_more_keyboard())
         else:
             bonus = 24
             u_data['credit'] += bonus
@@ -566,7 +633,7 @@ if __name__ == '__main__':
             STEP_COUNT: [CallbackQueryHandler(count_callback, pattern="^(cnt_|back_emoji|locked)")],
             STEP_DISTRIBUTION: [CallbackQueryHandler(distribution_callback, pattern="^(dist_|back_count)")],
             STEP_SPEED: [CallbackQueryHandler(speed_callback, pattern="^(spd_|back_dist)")],
-            STEP_VIEWS: [CallbackQueryHandler(views_callback, pattern="^(vw_|back_speed)")],
+            STEP_VIEWS: [CallbackQueryHandler(views_callback, pattern="^(vw_|back_speed|locked_vw|spd_info)")],
             STEP_REVIEW: [
                 CallbackQueryHandler(finalize_project, pattern="^create_final"),
                 CallbackQueryHandler(ask_views, pattern="^back_views"),
