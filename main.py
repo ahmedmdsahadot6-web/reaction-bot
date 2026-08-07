@@ -210,23 +210,22 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif msg.forward_origin and hasattr(msg.forward_origin, 'chat'):
         channel_title = msg.forward_origin.chat.title or "Channel"
         channel_id = str(msg.forward_origin.chat.id)
-    # ২. চ্যানেল লিংক বা ইউজারনেম থাকলে বের করা
+    # ২. চ্যানেল লিংক বা ইউজারনেম টেক্সট থেকে বের করা
     elif txt:
         clean_txt = txt.strip()
         if "t.me/" in clean_txt:
-            parts = clean_txt.split("t.me/")
-            username = parts[-1].replace("/", "")
+            username = clean_txt.split("t.me/")[-1].replace("/", "")
             channel_title = username
-            channel_id = f"@{username}"
+            channel_id = f"@{username}" if not username.startswith("@") else username
         elif clean_txt.startswith("@"):
             channel_title = clean_txt[1:]
             channel_id = clean_txt
         else:
             channel_title = clean_txt
-            channel_id = clean_txt
+            channel_id = f"@{clean_txt}"
 
     if not channel_id:
-        await msg.reply_text("❌ চ্যানেল শনাক্ত করা যায়নি! অনুগ্রহ করে সঠিক চ্যানেল লিংক পাঠান অথবা চ্যানেল থেকে একটি পোস্ট ফরোয়ার্ড করুন।")
+        await msg.reply_text("❌ চ্যানেল শনাক্ত করা যায়নি! সঠিক চ্যানেল লিংক/ইউজারনেম পাঠান বা পোস্ট ফরোয়ার্ড করুন।")
         return STEP_CHANNEL
 
     u_data['temp_project']['channel_name'] = channel_title
@@ -234,7 +233,7 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_data(db)
 
     confirm_text = (
-        f"👍 **চ্যানেল সফলভাবে যোগ করা হয়েছে!** সনাক্ত করা প্রকার: PUBLIC\n\n"
+        f"👍 **চ্যানেল সফলভাবে যোগ করা হয়েছে!**\n\n"
         f"📋 **চ্যানেলের বিবরণ:**\n"
         f"───────────────────\n"
         f"📺 **চ্যানেলের নাম:** {channel_title}\n"
@@ -678,7 +677,7 @@ if __name__ == '__main__':
             MessageHandler(filters.Regex("^📢 অল ইউজার ব্রডকাস্ট$"), start_broadcast),
         ],
         states={
-            STEP_CHANNEL: [MessageHandler(filters.ALL & ~filters.COMMAND, save_channel)],
+            STEP_CHANNEL: [MessageHandler((filters.TEXT | filters.FORWARDED) & ~filters.COMMAND, save_channel)],
             STEP_EMOJI: [CallbackQueryHandler(emoji_callback, pattern="^em_")],
             STEP_COUNT: [CallbackQueryHandler(count_callback, pattern="^(cnt_|back_emoji|locked)")],
             STEP_DISTRIBUTION: [CallbackQueryHandler(distribution_callback, pattern="^(dist_|back_count)")],
