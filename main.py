@@ -12,7 +12,7 @@ from telegram.ext import (
     MessageHandler, filters, ContextTypes, ConversationHandler
 )
 
-# 🌐 Render Web Server (24/7 Keep Alive)
+# 🌐 Render Web Server (Fixed Binding)
 web_app = Flask('')
 
 @web_app.route('/')
@@ -20,7 +20,8 @@ def home():
     return "Bot Status: ACTIVE 24/7"
 
 def run_web():
-    port = int(os.environ.get("PORT", 8080))
+    # Render-এর দেয়া পোর্টে সার্ভার রান করবে
+    port = int(os.environ.get("PORT", 10000))
     web_app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
@@ -79,7 +80,7 @@ def get_user_data(user_id):
         save_data(db)
     return db["users"][str_id]
 
-# 📱 ১. মূল মেনু কিবোর্ড (Main Menu)
+# 📱 মূল মেনু কিবোর্ড
 def get_user_keyboard():
     kb = [
         [KeyboardButton("➕ অটো রিয়্যাকশন প্রজেক্ট যোগ করুন")],
@@ -88,7 +89,7 @@ def get_user_keyboard():
     ]
     return ReplyKeyboardMarkup(kb, resize_keyboard=True)
 
-# 📱 ২. "আরও" মেনু কিবোর্ড (Sub Menu)
+# 📱 "আরও" সাব-মেনু কিবোর্ড
 def get_more_keyboard():
     kb = [
         [KeyboardButton("👤 প্রোফাইল"), KeyboardButton("🎁 দৈনিক বোনাস")],
@@ -116,7 +117,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 আপনাকে এই বট থেকে ব্লক করা হয়েছে।")
         return
 
-    # রেফারেল হ্যান্ডলিং
     if context.args and len(context.args) > 0:
         referrer_id = context.args[0]
         if referrer_id != str_id and referrer_id in db["users"] and str_id not in db["users"]:
@@ -132,7 +132,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-# 👑 Admin Panel Access ('অ্যাডমিন' বা /admin লিখলে খুলবে)
+# 👑 Admin Panel Access
 async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in ADMIN_IDS:
@@ -417,7 +417,7 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return STEP_REVIEW
 
-# 💾 'প্রকল্প তৈরি করুন' সেভ
+# 💾 Finalize Project
 async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -448,7 +448,6 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
     if update.callback_query:
         await update.callback_query.message.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
     else:
@@ -507,7 +506,7 @@ async def process_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_
     await update.message.reply_text(f"🎉 মোট `{count}` জন ইউজারের কাছে মেসেজ চলে গেছে!", parse_mode='Markdown', reply_markup=get_admin_keyboard())
     return ConversationHandler.END
 
-# ⚡ অটো রিয়্যাকশন পোস্ট ডেলিভারি
+# ⚡ Auto Reaction
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         message = update.channel_post
@@ -532,18 +531,16 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
     except Exception as e:
         logging.error(f"Auto Reaction Error: {e}")
 
-# 📌 মেইন মেনু নেভিগেশন (সম্পূর্ণ ডাইনামিক কিবোর্ড পরিবর্তন ব্যবস্থা)
+# 📌 Main Menu Handling
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     str_id = str(user_id)
     text = update.message.text
     u_data = get_user_data(str_id)
 
-    # 👑 'অ্যাডমিন' বা 'admin'
     if text.strip().lower() in ["অ্যাডমিন", "admin"]:
         return await admin_panel_command(update, context)
 
-    # Admin Control Panel Buttons
     if user_id in ADMIN_IDS:
         if text == "📊 বট স্ট্যাটাস":
             return await admin_panel_command(update, context)
@@ -555,21 +552,12 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif text == "🏠 প্রধান মেনু":
             return await update.message.reply_text("🏠 প্রধান মেনু:", reply_markup=get_user_keyboard())
 
-    # ⚙️ ১. '⚙️ আরও' বাটন প্রেস করলে সম্পূর্ণ মেনু চেঞ্জ হয়ে যাবে
     if text == "⚙️ আরও":
-        await update.message.reply_text(
-            "⚙️ **অতিরিক্ত অপশনসমূহ:**\nনিচের অপশনগুলো থেকে বেছে নিন:",
-            reply_markup=get_more_keyboard()
-        )
+        await update.message.reply_text("⚙️ **অতিরিক্ত অপশনসমূহ:**\nনিচের অপশনগুলো থেকে বেছে নিন:", reply_markup=get_more_keyboard())
 
-    # 🔙 ২. '🔙 ব্যাক' বাটন প্রেস করলে আবার আগের মেনুতে ফেরত যাবে
     elif text == "🔙 ব্যাক":
-        await update.message.reply_text(
-            "🏠 **প্রধান মেনু:**",
-            reply_markup=get_user_keyboard()
-        )
+        await update.message.reply_text("🏠 **প্রধান মেনু:**", reply_markup=get_user_keyboard())
 
-    # 👤 ৩. "আরও" মেনুর ভেতর 'প্রোফাইল' বাটন
     elif text == "👤 প্রোফাইল":
         profile_text = (
             f"👤 **ইউজার প্রোফাইল**\n───────────────────\n"
@@ -581,7 +569,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await update.message.reply_text(profile_text, parse_mode='Markdown')
 
-    # 🎁 ৪. "আরও" মেনুর ভেতর 'দৈনিক বোনাস' বাটন
     elif text == "🎁 দৈনিক বোনাস":
         today = datetime.now().strftime("%Y-%m-%d")
         if u_data.get("last_daily_bonus") == today:
@@ -592,7 +579,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             save_data(db)
             await update.message.reply_text(f"🎉 **দৈনিক বোনাস সফল!**\n\nআপনি ১০ ফ্রি ক্রেডিট পেয়েছেন।\nবর্তমান ক্রেডিট: `{u_data['credit']}`", parse_mode='Markdown')
 
-    # 🔗 ৫. "আরও" মেনুর ভেতর 'রেফারেল লিংক' বাটন
     elif text == "🔗 রেফারেল লিংক":
         ref_link = f"https://t.me/{BOT_USERNAME}?start={str_id}"
         refer_text = (
@@ -602,18 +588,15 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await update.message.reply_text(refer_text, parse_mode='Markdown')
 
-    # 🆘 ৬. "আরও" মেনুর ভেতর 'সহায়তা' বাটন
     elif text == "🆘 সহায়তা":
         clean_admin = ADMIN_USERNAME.replace("@", "")
         inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 অ্যাডমিনকে মেসেজ দিন", url=f"https://t.me/{clean_admin}")]])
         await update.message.reply_text(f"🆘 **সহায়তা ও সাপোর্ট**\n───────────────────\nআপনার কোনো সমস্যা বা প্রশ্ন থাকলে সরাসরি আমাদের অ্যাডমিনের সাথে যোগাযোগ করুন।", parse_mode='Markdown', reply_markup=inline_kb)
 
-    # 🌟 মূল মেনুর 'পরিকল্পনা এবং ভারসাম্য' বাটন
     elif text == "🌟 পরিকল্পনা এবং ভারসাম্য":
         p_count = len(u_data.get('projects', []))
         await update.message.reply_text(f"💎 **বর্তমান ক্রেডিট:** {u_data['credit']}\n📁 **সক্রিয় প্রকল্প:** {p_count}", parse_mode='Markdown')
     
-    # 📁 মূল মেনুর 'আমার প্রকল্প' বাটন
     elif text == "📁 আমার প্রকল্প":
         projects = u_data.get('projects', [])
         if projects:
@@ -624,7 +607,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("❌ আপনার কোনো সেভ করা প্রকল্প নেই।")
 
-    # 💰 মূল মেনুর 'রিচার্জ করুন' বাটন
     elif text == "💰 রিচার্জ করুন":
         clean_admin = ADMIN_USERNAME.replace("@", "")
         inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 অ্যাডমিনকে মেসেজ দিন", url=f"https://t.me/{clean_admin}")]])
@@ -666,4 +648,4 @@ if __name__ == '__main__':
     app.add_handler(MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post))
 
     print("🤖 Bot Active...")
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True)
