@@ -78,9 +78,8 @@ def cancel_keyboard():
 # --- Start Command ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    u_data = get_user_data(user.id)
+    get_user_data(user.id)
 
-    # Referral Check
     if context.args:
         try:
             ref_str = context.args[0]
@@ -123,12 +122,20 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
     
+    # Check if user clicked Cancel
+    if update.message.text and update.message.text in ["বাতিল করুন", "🔙 ব্যাক"]:
+        return await cancel_flow(update, context)
+
+    # Save Channel details from Forwarded message or Link/Text
     if update.message.forward_from_chat:
         u_data['channel_name'] = update.message.forward_from_chat.title
         u_data['channel_id'] = update.message.forward_from_chat.id
-    else:
+    elif update.message.text:
         u_data['channel_name'] = update.message.text
         u_data['channel_id'] = update.message.text
+    else:
+        u_data['channel_name'] = "My Channel"
+        u_data['channel_id'] = "N/A"
 
     text = (
         f"👍 **চ্যানেল সফলভাবে সনাক্ত করা হয়েছে!**\n\n"
@@ -451,8 +458,7 @@ if __name__ == '__main__':
         entry_points=[MessageHandler(filters.Regex("^➕ অটো রিয়্যাকশন প্রজেক্ট যোগ করুন$"), start_project)],
         states={
             STEP_CHANNEL: [
-                MessageHandler(filters.TEXT & ~filters.Regex("^(বাতিল করুন|🔙 ব্যাক)$"), save_channel),
-                MessageHandler(filters.FORWARDED, save_channel)
+                MessageHandler(filters.ALL & ~filters.COMMAND, save_channel)
             ],
             STEP_EMOJI: [CallbackQueryHandler(emoji_callback, pattern="^em_")],
             STEP_COUNT: [CallbackQueryHandler(count_callback, pattern="^(cnt_|back_emoji|locked)")],
