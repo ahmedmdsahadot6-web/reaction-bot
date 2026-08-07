@@ -26,7 +26,7 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# ⚠️ আপনার বটের Token
+# ⚠️ আপনার বটের Token ও Username
 BOT_TOKEN = "8895135409:AAHpo18y1o74_g1XBeTMO7CCpjj0NYfjWHA"
 BOT_USERNAME = "Sahadot_reaction123_bot"
 
@@ -460,4 +460,15 @@ if __name__ == '__main__':
             STEP_DISTRIBUTION: [CallbackQueryHandler(distribution_callback, pattern="^(dist_|back_count)")],
             STEP_SPEED: [CallbackQueryHandler(speed_callback, pattern="^(spd_|back_dist)")],
             STEP_VIEWS: [CallbackQueryHandler(views_callback, pattern="^(vw_|back_speed)")],
-            STEP_REVIEW: [CallbackQueryHandler(finalize_project, patte
+            STEP_REVIEW: [CallbackQueryHandler(finalize_project, pattern="^create_final"), CallbackQueryHandler(ask_views, pattern="^back_views"), CallbackQueryHandler(cancel_flow, pattern="^cancel_flow")]
+        },
+        fallbacks=[MessageHandler(filters.Regex("^(বাতিল করুন|🔙 ব্যাক)$"), cancel_flow)]
+    )
+
+    app.add_handler(conv_handler)
+    app.add_handler(CommandHandler('start', start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
+    app.add_handler(MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post))
+
+    print("🤖 Bot Ready...")
+    app.run_polling()
