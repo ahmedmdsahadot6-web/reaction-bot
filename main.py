@@ -11,7 +11,7 @@ from telegram.ext import (
     MessageHandler, filters, ContextTypes, ConversationHandler
 )
 
-# 🌐 Web Server for Render
+# 🌐 Web Server for Render 24/7
 web_app = Flask('')
 
 @web_app.route('/')
@@ -27,12 +27,12 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# ⚠️ বটের Config
+# ⚠️ বটের কনফিগারেশন
 BOT_TOKEN = "8895135409:AAHpo18y1o74_g1XBeTMO7CCpjj0NYfjWHA"
 BOT_USERNAME = "Sahadot_reaction123_bot"
-ADMIN_IDS = [7973059882]  # 🔒 শুধুমাত্র এই আইডি-র ইউজার অ্যাডমিন অ্যাক্সেস পাবে
+ADMIN_IDS = [7973059882]  # 👈 আপনার টেলিগ্রাম আসল আইডি সেট করা হয়েছে
 
-# 💾 Permanent Storage System
+# 💾 স্থায়ী ডাটাবেজ সিস্টেম (Json Storage)
 DB_FILE = "database.json"
 
 def load_data():
@@ -82,7 +82,7 @@ def get_user_data(user_id):
         save_data(db)
     return db["users"][str_id]
 
-# ────────────── 📱 ১. সাধারণ ইউজার প্যানেল কিবোর্ড ──────────────
+# 📱 ১. সাধারণ ইউজার প্যানেল কিবোর্ড
 def get_user_keyboard():
     return ReplyKeyboardMarkup([
         [KeyboardButton("➕ অটো রিয়্যাকশন প্রজেক্ট যোগ করুন")],
@@ -97,7 +97,7 @@ def get_more_keyboard():
         [KeyboardButton("🔙 ব্যাক")]
     ], resize_keyboard=True)
 
-# ────────────── 👑 ২. সম্পূর্ণ আলাদা অ্যাডমিন প্যানেল কিবোর্ড ──────────────
+# 👑 ২. অ্যাডমিন প্যানেল কিবোর্ড (সম্পূর্ণ আলাদা)
 def get_admin_keyboard():
     return ReplyKeyboardMarkup([
         [KeyboardButton("📊 বট স্ট্যাটাস"), KeyboardButton("📋 ইউজার লিস্ট")],
@@ -140,10 +140,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-    # অ্যাডমিন হলে মেসেজ
+    # অ্যাডমিন নোটিফিকেশন
     if user.id in ADMIN_IDS:
         await update.message.reply_text(
-            f"👑 **স্বাগতম অ্যাডমিন {user.first_name}!**\n\nআপনি অ্যাডমিন মোডে আছেন। অ্যাডমিন ড্যাশবোর্ডে যেতে `/admin` টাইপ করুন।",
+            f"👑 **স্বাগতম অ্যাডমিন {user.first_name}!**\n\nআপনি অ্যাডমিন মোডে আছেন। অ্যাডমিন প্যানেলে যেতে টাইপ করুন: `/admin`",
             reply_markup=get_user_keyboard(),
             parse_mode='Markdown'
         )
@@ -154,7 +154,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=get_user_keyboard()
     )
 
-# 👑 ───────────────────── 👑 সিকিউরড অ্যাডমিন প্যানেল 👑 ───────────────────── 👑
+# 👑 ───────────────────── 👑 সিকিউরড অ্যাডমিন ড্যাশবোর্ড 👑 ───────────────────── 👑
 async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in ADMIN_IDS:
@@ -171,7 +171,7 @@ async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
     await update.message.reply_text(text, parse_mode='Markdown', reply_markup=get_admin_keyboard())
 
-# --- Project Creation Flow ---
+# --- Project Creation Flow (User Panel) ---
 async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if str(user_id) in db["blocked"]:
@@ -426,7 +426,7 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
     return ConversationHandler.END
 
-# 👑 --- Admin Action Handlers ---
+# 👑 --- Admin Actions Handlers ---
 async def start_add_credit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
     await update.message.reply_text("➕ **ফরম্যাট লিখে পাঠান:** `User_ID Amount`\nযেমন: `12345678 100`", parse_mode='Markdown')
@@ -487,8 +487,8 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     u_data = get_user_data(user_id)
 
-    # 👑 Admin Navigation
-    if int(user_id) in ADMIN_IDS:
+    # 👑 Admin Navigation Control
+    if update.effective_user.id in ADMIN_IDS:
         if text == "📊 বট স্ট্যাটাস":
             return await admin_panel_command(update, context)
         elif text == "📋 ইউজার লিস্ট":
@@ -499,7 +499,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif text == "🔙 ইউজার প্যানেলে যান":
             return await update.message.reply_text("🏠 সাধারণ ইউজার মেনু:", reply_markup=get_user_keyboard())
 
-    # 📱 User Navigation
+    # 📱 Standard User Navigation
     if text == "🌟 পরিকল্পনা এবং ভারসাম্য":
         project_count = 1 if u_data['channel_name'] else 0
         response_text = (
