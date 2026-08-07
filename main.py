@@ -79,14 +79,12 @@ def get_user_data(user_id):
         save_data(db)
     return db["users"][str_id]
 
-# 📱 মূল মেনু কিবোর্ড (আপনার সুবিধামত বাটন সরাসরি যুক্ত করা হয়েছে)
+# 📱 মূল মেনু কিবোর্ড (একদম প্রথমটির মতো)
 def get_user_keyboard():
     kb = [
         [KeyboardButton("➕ অটো রিয়্যাকশন প্রজেক্ট যোগ করুন")],
-        [KeyboardButton("📁 আমার প্রকল্প"), KeyboardButton("🌟 পরিকল্পনা এবং ভারসাম্য")],
-        [KeyboardButton("👤 প্রোফাইল"), KeyboardButton("🎁 দৈনিক বোনাস")],
-        [KeyboardButton("🔗 রেফারেল লিংক"), KeyboardButton("💰 রিচার্জ করুন")],
-        [KeyboardButton("🆘 সহায়তা")]
+        [KeyboardButton("📁 আমার প্রকল্প"), KeyboardButton("⚙️ আরও")],
+        [KeyboardButton("🌟 পরিকল্পনা এবং ভারসাম্য"), KeyboardButton("💰 রিচার্জ করুন")]
     ]
     return ReplyKeyboardMarkup(kb, resize_keyboard=True)
 
@@ -525,7 +523,64 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
     except Exception as e:
         logging.error(f"Auto Reaction Error: {e}")
 
-# 📌 মেইন মেনু নেভিগেশন (সবকটি বাটন সরাসরি কিবোর্ডে হ্যান্ডেল করবে)
+# ⚙️ "আরও" অপশনের ইনলাইন বাটন হ্যান্ডলার (একদম প্রথমটির মতো)
+async def more_options_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    str_id = str(user_id)
+    u_data = get_user_data(user_id)
+    data = query.data
+
+    if data == "more_profile":
+        text = (
+            f"👤 **ইউজার প্রোফাইল**\n───────────────────\n"
+            f"🆔 **আইডি:** `{str_id}`\n"
+            f"💎 **ক্রেডিট:** `{u_data['credit']}`\n"
+            f"📁 **প্রকল্প সংখ্যা:** `{len(u_data['projects'])}`\n"
+            f"👥 **মোট রেফার:** `{u_data['ref_count']}`\n"
+            f"💰 **রেফার আয়:** `{u_data['ref_credit']}` ক্রেডিট"
+        )
+        await query.edit_message_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 ব্যাক", callback_data="more_back")]]))
+
+    elif data == "more_bonus":
+        today = datetime.now().strftime("%Y-%m-%d")
+        if u_data.get("last_daily_bonus") == today:
+            await query.answer("⚠️ আপনি আজকের দৈনিক বোনাস ইতোমধ্যেই গ্রহণ করেছেন!", show_alert=True)
+        else:
+            u_data["credit"] += 10
+            u_data["last_daily_bonus"] = today
+            save_data(db)
+            await query.answer("🎉 আপনি ১০ ক্রেডিট দৈনিক বোনাস পেয়েছেন!", show_alert=True)
+            text = f"🎁 **দৈনিক বোনাস সফল!**\n\nআপনি ১০ ফ্রি ক্রেডিট পেয়েছেন।\nবর্তমান ক্রেডিট: `{u_data['credit']}`"
+            await query.edit_message_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 ব্যাক", callback_data="more_back")]]))
+
+    elif data == "more_refer":
+        ref_link = f"https://t.me/{BOT_USERNAME}?start={str_id}"
+        text = (
+            f"🔗 **রেফারেল প্রোগ্রাম**\n───────────────────\n"
+            f"আপনার বন্ধুদের আপনার রেফারেল লিংক ব্যবহার করে যুক্ত হতে বলুন এবং প্রতি সফল রেফারে **২০ ফ্রি ক্রেডিট** পান!\n\n"
+            f"📌 **আপনার লিঙ্ক:**\n`{ref_link}`"
+        )
+        await query.edit_message_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 ব্যাক", callback_data="more_back")]]))
+
+    elif data == "more_help":
+        clean_admin = ADMIN_USERNAME.replace("@", "")
+        text = f"🆘 **সহায়তা ও সাপোর্ট**\n───────────────────\nআপনার কোনো সমস্যা বা প্রশ্ন থাকলে সরাসরি আমাদের অ্যাডমিনের সাথে যোগাযোগ করুন।"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("💬 অ্যাডমিনকে মেসেজ দিন", url=f"https://t.me/{clean_admin}")],
+            [InlineKeyboardButton("🔙 ব্যাক", callback_data="more_back")]
+        ])
+        await query.edit_message_text(text, parse_mode='Markdown', reply_markup=keyboard)
+
+    elif data == "more_back":
+        keyboard = [
+            [InlineKeyboardButton("👤 প্রোফাইল", callback_data="more_profile"), InlineKeyboardButton("🎁 দৈনিক বোনাস", callback_data="more_bonus")],
+            [InlineKeyboardButton("🔗 রেফারেল লিংক", callback_data="more_refer"), InlineKeyboardButton("🆘 সহায়তা", callback_data="more_help")]
+        ]
+        await query.edit_message_text("⚙️ **অতিরিক্ত অপশনসমূহ:**\nনিচের অপশনগুলো থেকে বেছে নিন:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
+# 📌 মেইন মেনু নেভিগেশন
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     str_id = str(user_id)
@@ -548,51 +603,18 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif text == "🏠 প্রধান মেনু":
             return await update.message.reply_text("🏠 প্রধান মেনু:", reply_markup=get_user_keyboard())
 
-    # 👤 প্রোফাইল বাটন
-    if text == "👤 প্রোফাইল":
-        profile_text = (
-            f"👤 **ইউজার প্রোফাইল**\n───────────────────\n"
-            f"🆔 **আইডি:** `{str_id}`\n"
-            f"💎 **ক্রেডিট:** `{u_data['credit']}`\n"
-            f"📁 **প্রকল্প সংখ্যা:** `{len(u_data['projects'])}`\n"
-            f"👥 **মোট রেফার:** `{u_data['ref_count']}`\n"
-            f"💰 **রেফার আয়:** `{u_data['ref_credit']}` ক্রেডিট"
-        )
-        await update.message.reply_text(profile_text, parse_mode='Markdown')
+    # ⚙️ 'আরও' বাটন (ইনলাইন কিবোর্ড পপ-আপ মেসেজ পাঠাবে)
+    if text == "⚙️ আরও":
+        keyboard = [
+            [InlineKeyboardButton("👤 প্রোফাইল", callback_data="more_profile"), InlineKeyboardButton("🎁 দৈনিক বোনাস", callback_data="more_bonus")],
+            [InlineKeyboardButton("🔗 রেফারেল লিংক", callback_data="more_refer"), InlineKeyboardButton("🆘 সহায়তা", callback_data="more_help")]
+        ]
+        await update.message.reply_text("⚙️ **অতিরিক্ত অপশনসমূহ:**\nনিচের অপশনগুলো থেকে বেছে নিন:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
-    # 🎁 দৈনিক বোনাস বাটন
-    elif text == "🎁 দৈনিক বোনাস":
-        today = datetime.now().strftime("%Y-%m-%d")
-        if u_data.get("last_daily_bonus") == today:
-            await update.message.reply_text("⚠️ আপনি আজকের দৈনিক বোনাস ইতোমধ্যেই গ্রহণ করেছেন!")
-        else:
-            u_data["credit"] += 10
-            u_data["last_daily_bonus"] = today
-            save_data(db)
-            await update.message.reply_text(f"🎉 **দৈনিক বোনাস সফল!**\n\nআপনি ১০ ফ্রি ক্রেডিট পেয়েছেন।\nবর্তমান ক্রেডিট: `{u_data['credit']}`", parse_mode='Markdown')
-
-    # 🔗 রেফারেল লিংক বাটন
-    elif text == "🔗 রেফারেল লিংক":
-        ref_link = f"https://t.me/{BOT_USERNAME}?start={str_id}"
-        refer_text = (
-            f"🔗 **রেফারেল প্রোগ্রাম**\n───────────────────\n"
-            f"আপনার বন্ধুদের আপনার রেফারেল লিংক ব্যবহার করে যুক্ত হতে বলুন এবং প্রতি সফল রেফারে **২০ ফ্রি ক্রেডিট** পান!\n\n"
-            f"📌 **আপনার লিঙ্ক:**\n`{ref_link}`"
-        )
-        await update.message.reply_text(refer_text, parse_mode='Markdown')
-
-    # 🆘 সহায়তা বাটন
-    elif text == "🆘 সহায়তা":
-        clean_admin = ADMIN_USERNAME.replace("@", "")
-        inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 অ্যাডমিনকে মেসেজ দিন", url=f"https://t.me/{clean_admin}")]])
-        await update.message.reply_text(f"🆘 **সহায়তা ও সাপোর্ট**\n───────────────────\nআপনার কোনো সমস্যা বা প্রশ্ন থাকলে সরাসরি আমাদের অ্যাডমিনের সাথে যোগাযোগ করুন।", parse_mode='Markdown', reply_markup=inline_kb)
-
-    # 🌟 পরিকল্পনা এবং ভারসাম্য বাটন
     elif text == "🌟 পরিকল্পনা এবং ভারসাম্য":
         p_count = len(u_data.get('projects', []))
         await update.message.reply_text(f"💎 **বর্তমান ক্রেডিট:** {u_data['credit']}\n📁 **সক্রিয় প্রকল্প:** {p_count}", parse_mode='Markdown')
     
-    # 📁 আমার প্রকল্প বাটন
     elif text == "📁 আমার প্রকল্প":
         projects = u_data.get('projects', [])
         if projects:
@@ -603,7 +625,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("❌ আপনার কোনো সেভ করা প্রকল্প নেই।")
 
-    # 💰 রিচার্জ করুন বাটন
     elif text == "💰 রিচার্জ করুন":
         clean_admin = ADMIN_USERNAME.replace("@", "")
         inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 অ্যাডমিনকে মেসেজ দিন", url=f"https://t.me/{clean_admin}")]])
@@ -641,6 +662,7 @@ if __name__ == '__main__':
     app.add_handler(conv_handler)
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
+    app.add_handler(CallbackQueryHandler(more_options_callback, pattern="^more_"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
     app.add_handler(MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post))
 
