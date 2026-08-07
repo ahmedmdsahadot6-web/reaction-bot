@@ -2,7 +2,6 @@ import logging
 import random
 import os
 import json
-from datetime import date
 from threading import Thread
 from flask import Flask
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup, ReactionTypeEmoji
@@ -16,7 +15,7 @@ web_app = Flask('')
 
 @web_app.route('/')
 def home():
-    return "Bot is running 24/7 successfully!"
+    return "Bot is running 24/7!"
 
 def run_web():
     port = int(os.environ.get("PORT", 8080))
@@ -27,7 +26,7 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# 🔑 কনফিগারেশন এবং নতুন টোকেন
+# 🔑 কনফিগারেশন
 BOT_TOKEN = "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw"
 BOT_USERNAME = "Sahadot_reaction123_bot"
 ADMIN_IDS = [7973059882, 8454401183]
@@ -115,7 +114,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-# 👑 Admin Panel Logic
+# 👑 Admin Panel
 async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in ADMIN_IDS:
@@ -131,7 +130,7 @@ async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
     await update.message.reply_text(text, parse_mode='Markdown', reply_markup=get_admin_keyboard())
 
-# --- Step 0: Channel Add ---
+# --- Step 0: Channel Setup ---
 async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = get_user_data(user_id)
@@ -149,8 +148,9 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"🛰 **ধাপ 0 • চ্যানেল সেটআপ**\n"
         f"───────────────────\n\n"
-        f"1) @{BOT_USERNAME} কে আপনার চ্যানেলে **Admin** হিসেবে যোগ করুন।\n"
-        f"2) এরপর আপনার চ্যানেলের **ইউজারনেম** (যেমন: `@Sahadot_Reaction_Vip`) লিখে পাঠোন অথবা পোস্ট **ফরোয়ার্ড করুন**।"
+        f"১) **@{BOT_USERNAME}** কে আপনার চ্যানেলে **Admin** হিসেবে এড করুন।\n\n"
+        f"২) এরপর চ্যানেলের যেকোনো **১টি পোস্ট ফরওয়ার্ড (Forward) করে** এখানে পাঠান\n"
+        f"অথবা ইউজারনেম (যেমন: `@Sahadot_Reaction_Vip`) লিখে পাঠান:"
     )
     await update.message.reply_text(text, parse_mode='Markdown', reply_markup=cancel_keyboard())
     return STEP_CHANNEL
@@ -166,8 +166,10 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     target_chat = None
 
+    # ১. ফরওয়ার্ড করা মেসেজ থেকে চ্যানেল ধরা
     if msg.forward_from_chat:
         target_chat = msg.forward_from_chat
+    # ২. ইউজারনেম/লিংক থেকে চ্যানেল ধরা
     elif txt:
         clean_text = txt.strip()
         if "t.me/" in clean_text:
@@ -177,11 +179,14 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         try:
             target_chat = await context.bot.get_chat(clean_text)
-        except Exception:
+        except Exception as err:
             await msg.reply_text(
-                f"❌ **চ্যানেল খুঁজে পাওয়া যায়নি!**\n\n"
-                f"১. বটটি `{clean_text}` চ্যানেলে **Admin** আছে কিনা তা নিশ্চিত করুন।\n"
-                f"২. চ্যানেল ইউজারনেম স্পেলিং চেক করে আবার পাঠান।"
+                f"❌ **চ্যানেল পাওয়া যায়নি!**\n\n"
+                f"📌 **সহজ উপায়:** আপনার চ্যানেল থেকে যেকোনো ১টি পোস্ট সরাসরি এই বটে **Forward** করে পাঠিয়ে দিন।\n\n"
+                f"⚠️ **অথবা নিশ্চিত করুন:**\n"
+                f"• বটটি (`@{BOT_USERNAME}`) চ্যানেলে **Admin** আছে।\n"
+                f"• ইউজারনেম সঠিক দেওয়া হয়েছে।\n\n"
+                f"*(ত্রুটি: {err})*"
             )
             return STEP_CHANNEL
 
@@ -214,7 +219,7 @@ async def ask_emoji(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"───────────────────\n\n"
         f"আপনার পোস্টের জন্য প্রতিক্রিয়া চয়ন করুন।\n\n"
         f"**নির্বাচিত ({len(temp['emojis'])}):** {selected}\n\n"
-        f"🌟 **ইমোজিতে চাপ দিয়ে যোগ/রিমুভ করুন।** ✅ **সম্পন্ন হলে বাটন চাপুন।**"
+        f"🌟 **ইমোজিতে চাপ দিয়ে সিলেক্ট/রিমুভ করুন।** ✅ **সম্পন্ন হলে বাটন চাপুন।**"
     )
     
     keyboard = [
@@ -259,7 +264,7 @@ async def ask_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"📊 **ধাপ 2 • মোট প্রতিক্রিয়া**\n"
         f"───────────────────\n\n"
-        f"প্রতি পোস্টে কত প্রতিক্রিয়া সংখ্যা চান?\n\n"
+        f"প্রতি পোস্টে কত প্রতিক্রিয়া পাঠানো হবে?\n\n"
         f"👉 **বর্তমান নির্বাচন:** {temp['count']} প্রতিক্রিয়া"
     )
     keyboard = [
@@ -394,7 +399,7 @@ async def show_review(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return STEP_REVIEW
 
-# 💾 'প্রকল্প তৈরি করুন' এ সেভ করা
+# 💾 'প্রকল্প তৈরি করুন' ফাইনাল সেভ
 async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -484,7 +489,7 @@ async def process_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_
     await update.message.reply_text(f"🎉 মোট `{count}` জন ইউজারের কাছে মেসেজ চলে গেছে!", parse_mode='Markdown', reply_markup=get_admin_keyboard())
     return ConversationHandler.END
 
-# ⚡ চ্যানেলে নতুন পোস্ট ডেলিভারিতে অটো-রিয়্যাকশন
+# ⚡ চ্যানেলে নতুন পোস্ট এলে অটো-রিয়্যাকশন পাঠানো
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         message = update.channel_post
