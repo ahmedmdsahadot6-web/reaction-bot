@@ -11,12 +11,12 @@ from telegram.ext import (
     MessageHandler, filters, ContextTypes, ConversationHandler
 )
 
-# 🌐 Flask Server for Render Keep-Alive
+# 🌐 Render Web Server (24/7 Keep Alive)
 web_app = Flask('')
 
 @web_app.route('/')
 def home():
-    return "Bot status: ACTIVE 24/7"
+    return "Bot is running 24/7 successfully!"
 
 def run_web():
     port = int(os.environ.get("PORT", 8080))
@@ -27,7 +27,7 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# ⚙️ কনফিগারেশন
+# 🔑 কনফিগারেশন এবং নতুন টোকেন
 BOT_TOKEN = "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw"
 BOT_USERNAME = "Sahadot_reaction123_bot"
 ADMIN_IDS = [7973059882, 8454401183]
@@ -56,7 +56,7 @@ db = load_data()
 if "users" not in db: db["users"] = {}
 if "blocked" not in db: db["blocked"] = []
 
-# States
+# Conversational States
 (STEP_CHANNEL, STEP_EMOJI, STEP_COUNT, STEP_DISTRIBUTION, 
  STEP_SPEED, STEP_VIEWS, STEP_REVIEW, STEP_ADMIN_ADD_CREDIT, 
  STEP_ADMIN_BLOCK_USER, STEP_ADMIN_BROADCAST) = range(10)
@@ -78,7 +78,7 @@ def get_user_data(user_id):
         save_data(db)
     return db["users"][str_id]
 
-# 📱 কিবোর্ড প্যানেল
+# 📱 কিবোর্ড লেআউট
 def get_user_keyboard(user_id):
     kb = [
         [KeyboardButton("➕ অটো রিয়্যাকশন প্রজেক্ট যোগ করুন")],
@@ -105,33 +105,33 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     str_id = str(user.id)
     
     if str_id in db["blocked"]:
-        await update.message.reply_text("🚫 আপনি এই বট থেকে ব্লকড!")
+        await update.message.reply_text("🚫 আপনাকে এই বট থেকে ব্লক করা হয়েছে।")
         return
 
     get_user_data(user.id)
     await update.message.reply_text(
-        f"👋 **স্বাগতম {user.first_name}!**\n\nনিচের মেনু ব্যবহার করে আপনার অটো-রিয়্যাকশন প্রজেক্ট সেটআপ করুন:",
+        f"👋 **স্বাগতম {user.first_name}!**\n\nঅটো রিয়্যাকশন প্রজেক্ট তৈরি করতে নিচের **'➕ অটো রিয়্যাকশন প্রজেক্ট যোগ করুন'** বাটন চাপুন:",
         reply_markup=get_user_keyboard(user.id),
         parse_mode='Markdown'
     )
 
-# 👑 Admin Panel
+# 👑 Admin Panel Logic
 async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in ADMIN_IDS:
-        await update.message.reply_text("❌ আপনার এই কমান্ডের এক্সেস নেই!")
+        await update.message.reply_text("❌ এই কমান্ডটি শুধু মাত্র অ্যাডমিনদের জন্য!")
         return
 
     text = (
-        f"👑 **ADMIN PANEL**\n"
+        f"👑 **ADMIN CONTROL PANEL**\n"
         f"═══════════════════════\n\n"
         f"👥 মোট ইউজার: `{len(db['users'])}`\n"
-        f"🚫 ব্লক ইউজার: `{len(db['blocked'])}`\n"
+        f"🚫 ব্লককৃত ইউজার: `{len(db['blocked'])}`\n"
         f"═══════════════════════"
     )
     await update.message.reply_text(text, parse_mode='Markdown', reply_markup=get_admin_keyboard())
 
-# --- Flow: Channel Setup ---
+# --- Step 0: Channel Add ---
 async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = get_user_data(user_id)
@@ -149,8 +149,8 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"🛰 **ধাপ 0 • চ্যানেল সেটআপ**\n"
         f"───────────────────\n\n"
-        f"1) @{BOT_USERNAME} কে আপনার চ্যানেলে Admin বানান।\n"
-        f"2) এরপর চ্যানেলের **ইউজারনেম** (যেমন: `@Sahadot_Reaction_Vip`) লিখে নিচে পাঠান অথবা চ্যানেল থেকে ১টি পোস্ট **ফরোয়ার্ড করুন**।"
+        f"1) @{BOT_USERNAME} কে আপনার চ্যানেলে **Admin** হিসেবে যোগ করুন।\n"
+        f"2) এরপর আপনার চ্যানেলের **ইউজারনেম** (যেমন: `@Sahadot_Reaction_Vip`) লিখে পাঠোন অথবা পোস্ট **ফরোয়ার্ড করুন**।"
     )
     await update.message.reply_text(text, parse_mode='Markdown', reply_markup=cancel_keyboard())
     return STEP_CHANNEL
@@ -180,8 +180,8 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             await msg.reply_text(
                 f"❌ **চ্যানেল খুঁজে পাওয়া যায়নি!**\n\n"
-                f"১. নিশ্চিত করুন বটটি `{clean_text}` চ্যানেলে **Admin** রয়েছে।\n"
-                f"২. সঠিক চ্যানেল ইউজারনেম পাঠিয়েছেন কিনা তা যাচাই করুন।"
+                f"১. বটটি `{clean_text}` চ্যানেলে **Admin** আছে কিনা তা নিশ্চিত করুন।\n"
+                f"২. চ্যানেল ইউজারনেম স্পেলিং চেক করে আবার পাঠান।"
             )
             return STEP_CHANNEL
 
@@ -203,6 +203,7 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return STEP_CHANNEL
 
+# --- Step 1: Emoji ---
 async def ask_emoji(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
     temp = u_data['temp_project']
@@ -213,7 +214,7 @@ async def ask_emoji(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"───────────────────\n\n"
         f"আপনার পোস্টের জন্য প্রতিক্রিয়া চয়ন করুন।\n\n"
         f"**নির্বাচিত ({len(temp['emojis'])}):** {selected}\n\n"
-        f"🌟 **ইমোজিতে চাপ দিয়ে সিলেক্ট/রিমুভ করুন।** ✅ **সম্পন্ন হলে ট্যাপ করুন।**"
+        f"🌟 **ইমোজিতে চাপ দিয়ে যোগ/রিমুভ করুন।** ✅ **সম্পন্ন হলে বাটন চাপুন।**"
     )
     
     keyboard = [
@@ -251,13 +252,14 @@ async def emoji_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_data(db)
     return await ask_emoji(update, context)
 
+# --- Step 2: Reaction Count ---
 async def ask_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
     temp = u_data['temp_project']
     text = (
         f"📊 **ধাপ 2 • মোট প্রতিক্রিয়া**\n"
         f"───────────────────\n\n"
-        f"প্রতি পোস্টে কত প্রতিক্রিয়া পাঠানো হবে?\n\n"
+        f"প্রতি পোস্টে কত প্রতিক্রিয়া সংখ্যা চান?\n\n"
         f"👉 **বর্তমান নির্বাচন:** {temp['count']} প্রতিক্রিয়া"
     )
     keyboard = [
@@ -283,12 +285,13 @@ async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_data(db)
     return await ask_count(update, context)
 
+# --- Step 3: Distribution ---
 async def ask_distribution(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"⚙️ **ধাপ 3 • বিতরণের ধরন**\n"
         f"───────────────────\n\n"
-        f"🎲 **এলোমেলো** - এলোমেলো সংখ্যায় রিয়্যাকশন বিভাজন\n"
-        f"⚖️ **সকল সমান** - প্রতিটি ইমোজিতে সমান সংখ্যায় রিয়্যাকশন"
+        f"🎲 **এলোমেলো** - প্রতিটি ইমোজিতে র‍্যান্ডম রিয়্যাকশন\n"
+        f"⚖️ **সকল সমান** - ইমোজিগুলোতে সমান সংখ্যার বিতরণ"
     )
     keyboard = [
         [InlineKeyboardButton("🎲 এলোমেলো", callback_data="dist_এলোমেলো")],
@@ -310,6 +313,7 @@ async def distribution_callback(update: Update, context: ContextTypes.DEFAULT_TY
     save_data(db)
     return await ask_distribution(update, context)
 
+# --- Step 4: Speed ---
 async def ask_speed(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
     temp = u_data['temp_project']
@@ -337,6 +341,7 @@ async def speed_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_data(db)
     return await ask_speed(update, context)
 
+# --- Step 5: Views ---
 async def ask_views(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
     temp = u_data['temp_project']
@@ -364,6 +369,7 @@ async def views_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_data(db)
     return await ask_views(update, context)
 
+# --- Final Review ---
 async def show_review(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
     temp = u_data['temp_project']
@@ -388,7 +394,7 @@ async def show_review(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return STEP_REVIEW
 
-# 💾 সেভ এবং প্রকল্প ফাইনাল করা
+# 💾 'প্রকল্প তৈরি করুন' এ সেভ করা
 async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -426,10 +432,10 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard(user_id))
     return ConversationHandler.END
 
-# 👑 --- Admin Panel Actions ---
+# 👑 Admin Features Handler
 async def start_add_credit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
-    await update.message.reply_text("➕ **ক্রেডিট দিতে লিখুন:** `User_ID Amount`\nযেমন: `7973059882 100`", parse_mode='Markdown')
+    await update.message.reply_text("➕ **ক্রেডিট দিতে লিখে পাঠান:** `User_ID Amount`\nযেমন: `7973059882 100`", parse_mode='Markdown')
     return STEP_ADMIN_ADD_CREDIT
 
 async def process_admin_credit(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -448,7 +454,7 @@ async def process_admin_credit(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def start_block_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
-    await update.message.reply_text("🚫 **ব্লক করতে ইউজার আইডি লিখে পাঠান:**", parse_mode='Markdown')
+    await update.message.reply_text("🚫 **ব্লক করতে আইডি লিখে পাঠান:**", parse_mode='Markdown')
     return STEP_ADMIN_BLOCK_USER
 
 async def process_admin_block(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -463,7 +469,7 @@ async def process_admin_block(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
-    await update.message.reply_text("📢 **ব্রডকাস্ট মেসেজটি লিখুন:**", parse_mode='Markdown')
+    await update.message.reply_text("📢 **ব্রডকাস্ট করার মেসেজটি পাঠোন:**", parse_mode='Markdown')
     return STEP_ADMIN_BROADCAST
 
 async def process_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -475,10 +481,10 @@ async def process_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_
             count += 1
         except Exception:
             pass
-    await update.message.reply_text(f"🎉 মোট `{count}` জন ইউজারের কাছে মেসেজ পাঠানো হয়েছে!", parse_mode='Markdown', reply_markup=get_admin_keyboard())
+    await update.message.reply_text(f"🎉 মোট `{count}` জন ইউজারের কাছে মেসেজ চলে গেছে!", parse_mode='Markdown', reply_markup=get_admin_keyboard())
     return ConversationHandler.END
 
-# ⚡ চ্যানেলে অটো-রিয়্যাকশন ডেলিভারি
+# ⚡ চ্যানেলে নতুন পোস্ট ডেলিভারিতে অটো-রিয়্যাকশন
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         message = update.channel_post
@@ -503,7 +509,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
     except Exception as e:
         logging.error(f"Auto Reaction Error: {e}")
 
-# 📌 মেনু নিয়ন্ত্রণ
+# 📌 মেইন মেনু নেভিগেশন
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     str_id = str(user_id)
