@@ -28,7 +28,7 @@ def keep_alive():
     t.start()
 
 # ⚙️ কনফিগারেশন
-BOT_TOKEN = "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw"
+BOT_TOKEN = "895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw"
 BOT_USERNAME = "Sahadot_reaction123_bot"
 ADMIN_IDS = [7973059882, 8454401183]
 ADMIN_USERNAME = "@SAHADOT_VAI"
