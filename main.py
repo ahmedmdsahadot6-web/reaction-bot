@@ -3,6 +3,7 @@ import random
 import os
 import json
 import asyncio
+import re
 from datetime import datetime
 from threading import Thread
 from flask import Flask
@@ -181,7 +182,7 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    txt = msg.text or ""
+    txt = (msg.text or "").strip()
     user_id = update.effective_user.id
     u_data = get_user_data(user_id)
 
@@ -191,22 +192,31 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     target_chat = None
 
+    # ১. ফরওয়ার্ড করা মেসেজ চেক করা
     if msg.forward_from_chat:
         target_chat = msg.forward_from_chat
-    elif txt:
-        clean_text = txt.strip()
+    elif hasattr(msg, 'forward_origin') and msg.forward_origin and hasattr(msg.forward_origin, 'chat'):
+        target_chat = msg.forward_origin.chat
+
+    # ২. যদি মেসেজ টেক্সট হিসেবে লিংক বা ইউজারনেম পাঠানো হয়
+    if not target_chat and txt:
+        clean_text = txt
+        # লিঙ্ক থেকে সঠিক ইউজারনেম ফিল্টার করা
         if "t.me/" in clean_text:
-            clean_text = "@" + clean_text.split("t.me/")[-1].replace("/", "").replace("@", "")
+            match = re.search(r"t\.me/([^/]+)", clean_text)
+            if match:
+                clean_text = "@" + match.group(1)
         elif not clean_text.startswith("@") and not clean_text.startswith("-100"):
             clean_text = "@" + clean_text
 
         try:
-            target_chat = await asyncio.wait_for(context.bot.get_chat(clean_text), timeout=5.0)
-        except Exception:
+            target_chat = await context.bot.get_chat(clean_text)
+        except Exception as e:
+            logging.error(f"Get Chat Error: {e}")
             await msg.reply_text(
-                f"❌ **চ্যানেল সংযুক্ত করা যায়নি!**\n\n"
-                f"📌 **সবচেয়ে সহজ উপায়:** আপনার চ্যানেল থেকে যেকোনো ১টি পোস্ট সরাসরি এই বটে **Forward** করে পাঠিয়ে দিন।\n\n"
-                f"⚠️ **অথবা নিশ্চিত করুন:** বটটি চ্যানেলে **Admin** হিসেবে যুক্ত আছে।"
+                f"❌ **চ্যানেল খুঁজে পাওয়া যায়নি!**\n\n"
+                f"📌 **সহজ সমাধান:** আপনার চ্যানেল থেকে যেকোনো ১টি বার্তা সরাসরি এই বটের মধ্যে **Forward** করে পাঠিয়ে দিন।\n\n"
+                f"⚠️ **নোট:** চ্যানেলটি অবশ্যই পাবলিক হতে হবে অথবা বটকে আগে চ্যানেলে অ্যাডমিন করতে হবে।"
             )
             return STEP_CHANNEL
 
@@ -218,7 +228,7 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for proj in info.get("projects", []):
                 if str(proj.get("channel_id")) == target_id_str and str(uid) != str(user_id):
                     await msg.reply_text(
-                        f"⚠️ **এই চ্যানেলটি ইতোমধ্যেই অন্য একজন ব্যবহারকারী যোগ করেছেন!**\n\n"
+                        f"⚠️ **এই চ্যানেলটি ইতোমধ্যে অন্য একজন ব্যবহারকারী যোগ করেছেন!**\n\n"
                         f"একটি চ্যানেল একাধিক ইউজার বটের সাথে যুক্ত করতে পারবে না।",
                         reply_markup=get_user_keyboard()
                     )
@@ -229,17 +239,16 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_data(db)
 
         confirm_text = (
-            f"👍 **চ্যানেল সফলভাবে সংযুক্ত হয়েছে!**\n\n"
-            f"📋 **চ্যানেলের বিবরণ:**\n"
-            f"───────────────────\n"
-            f"📺 **চ্যানেলের নাম:** {target_chat.title}\n"
-            f"🆔 **চ্যানেল আইডি:** `{target_chat.id}`\n"
-            f"───────────────────"
+            f"👍 **চ্যানেল সফলভাবে যুক্ত হয়েছে!**\n\n"
+            f"📺 **নাম:** {target_chat.title}\n"
+            f"🆔 **আইডি:** `{target_chat.id}`"
         )
         await msg.reply_text(confirm_text, parse_mode='Markdown')
-        # চ্যানেল নিশ্চিত হওয়ার পর ইমোজি মেনু কল করা হচ্ছে
+        
+        # সফলভাবে যুক্ত হলে ধাপ-১ (ইমোজি মেনু) দেখানো হবে
         return await render_emoji_menu(update, context)
 
+    await msg.reply_text("❌ অবৈধ ইনপুট! দয়া করে চ্যানেলের লিংক পাঠান অথবা একটি পোস্ট ফরওয়ার্ড করুন।")
     return STEP_CHANNEL
 
 # --- Step 1: Emoji ---
@@ -247,14 +256,14 @@ async def render_emoji_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = get_user_data(user_id)
     temp = u_data['temp_project']
-    selected = " ".join(temp['emojis']) if temp['emojis'] else "(none)"
+    selected = " ".join(temp['emojis']) if temp['emojis'] else "(কোনোটিই নয়)"
     
     text = (
         f"📝 **ধাপ 1 • ইমোজি নির্বাচন করুন**\n"
         f"───────────────────\n\n"
         f"আপনার পোস্টের জন্য প্রতিক্রিয়া চয়ন করুন।\n\n"
         f"**নির্বাচিত ({len(temp['emojis'])}):** {selected}\n\n"
-        f"🌟 **ইমোজিতে চাপ দিয়ে সিলেক্ট/রিমুভ করুন।** ✅ **সম্পন্ন হলে বাটন চাপুন।**"
+        f"🌟 **ইমোজিতে চাপ দিয়ে সিলেক্ট/রিমুভ করুন।** ✅ **সম্পন্ন হলে নিচে চাপুন।**"
     )
     
     keyboard = [
@@ -426,7 +435,7 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"┌────────────────────\n"
         f"│ 😊 ইমোজি: {emojis}\n"
         f"│ 🚀 প্রতিক্রিয়া: {temp['count']}\n"
-        f"│ 👁 ভিউ: {temp['views']} (তাৎক্ষণিক)\n"
+        f"│ 👁 ভিউ: {temp['views']}\n"
         f"│ ⚡ গতি: {temp['speed']}\n"
         f"│ ⚙️ বিতরণ: {temp['dist']}\n"
         f"└────────────────────"
@@ -663,7 +672,6 @@ if __name__ == '__main__':
             MessageHandler(filters.Regex("^📢 অল ইউজার ব্রডকাস্ট$"), start_broadcast),
         ],
         states={
-            # 🔧 মূল ফিক্স: এখানে filters.ALL দেওয়া হলো যেন ফরওয়ার্ড করা মেসেজও বটের কাছে সঠিকভাবে পৌঁছায়
             STEP_CHANNEL: [MessageHandler(filters.ALL & ~filters.COMMAND, save_channel)],
             STEP_EMOJI: [CallbackQueryHandler(emoji_callback, pattern="^(em_|em_done)")],
             STEP_COUNT: [CallbackQueryHandler(count_callback, pattern="^(cnt_|back_emoji|locked)")],
