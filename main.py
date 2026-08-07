@@ -192,16 +192,20 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     target_chat = None
 
-    # ১. ফরওয়ার্ড করা মেসেজ চেক করা
+    # ১. ফরওয়ার্ড করা পোস্ট থেকে চ্যানেল চ্যাট এক্সট্র্যাক্ট করার জন্য
     if msg.forward_from_chat:
         target_chat = msg.forward_from_chat
-    elif hasattr(msg, 'forward_origin') and msg.forward_origin and hasattr(msg.forward_origin, 'chat'):
-        target_chat = msg.forward_origin.chat
+    elif hasattr(msg, 'forward_origin') and msg.forward_origin:
+        # Telegram API v20+ support for forward_origin
+        origin = msg.forward_origin
+        if hasattr(origin, 'chat') and origin.chat:
+            target_chat = origin.chat
+        elif getattr(origin, 'type', None) == 'channel' and hasattr(origin, 'chat'):
+            target_chat = origin.chat
 
-    # ২. যদি মেসেজ টেক্সট হিসেবে লিংক বা ইউজারনেম পাঠানো হয়
+    # ২. যদি মেসেজ টেক্সট হিসেবে লিঙ্ক বা ইউজারনেম পাঠানো হয়
     if not target_chat and txt:
         clean_text = txt
-        # লিঙ্ক থেকে সঠিক ইউজারনেম ফিল্টার করা
         if "t.me/" in clean_text:
             match = re.search(r"t\.me/([^/]+)", clean_text)
             if match:
@@ -213,17 +217,11 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             target_chat = await context.bot.get_chat(clean_text)
         except Exception as e:
             logging.error(f"Get Chat Error: {e}")
-            await msg.reply_text(
-                f"❌ **চ্যানেল খুঁজে পাওয়া যায়নি!**\n\n"
-                f"📌 **সহজ সমাধান:** আপনার চ্যানেল থেকে যেকোনো ১টি বার্তা সরাসরি এই বটের মধ্যে **Forward** করে পাঠিয়ে দিন।\n\n"
-                f"⚠️ **নোট:** চ্যানেলটি অবশ্যই পাবলিক হতে হবে অথবা বটকে আগে চ্যানেলে অ্যাডমিন করতে হবে।"
-            )
-            return STEP_CHANNEL
 
     if target_chat:
         target_id_str = str(target_chat.id)
 
-        # 🔒 চ্যানেল ডুপ্লিকেট চেকিং
+        # 🔒 অন্য কেউ এই চ্যানেল এড করেছে কিনা
         for uid, info in db["users"].items():
             for proj in info.get("projects", []):
                 if str(proj.get("channel_id")) == target_id_str and str(uid) != str(user_id):
@@ -234,21 +232,27 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                     return ConversationHandler.END
 
-        u_data['temp_project']['channel_name'] = target_chat.title or "Channel"
+        u_data['temp_project']['channel_name'] = getattr(target_chat, 'title', 'Channel') or "Channel"
         u_data['temp_project']['channel_id'] = target_id_str
         save_data(db)
 
         confirm_text = (
-            f"👍 **চ্যানেল সফলভাবে যুক্ত হয়েছে!**\n\n"
-            f"📺 **নাম:** {target_chat.title}\n"
-            f"🆔 **আইডি:** `{target_chat.id}`"
+            f"👍 **চ্যানেল সফলভাবে সনাক্ত করা হয়েছে!**\n\n"
+            f"📺 **নাম:** {u_data['temp_project']['channel_name']}\n"
+            f"🆔 **আইডি:** `{target_id_str}`"
         )
         await msg.reply_text(confirm_text, parse_mode='Markdown')
         
-        # সফলভাবে যুক্ত হলে ধাপ-১ (ইমোজি মেনু) দেখানো হবে
+        # পরবর্তী ধাপ (ইমোজি মেনু) রেন্ডার করা
         return await render_emoji_menu(update, context)
 
-    await msg.reply_text("❌ অবৈধ ইনপুট! দয়া করে চ্যানেলের লিংক পাঠান অথবা একটি পোস্ট ফরওয়ার্ড করুন।")
+    # যদি ফরওয়ার্ড মেসেজ প্রাইভেট চ্যানেল থেকে আসে অথবা হ্যান্ডেল না করা যায়
+    await msg.reply_text(
+        "❌ **চ্যানেল সনাক্ত করা সম্ভব হয়নি!**\n\n"
+        "১. বটকে আগে আপনার চ্যানেলে **Admin** বানিয়েছেন কিনা নিশ্চিত করুন।\n"
+        "২. চ্যানেলটি যদি **Public** হয় তবে ইউজারনেম পাঠান (যেমন: `@mychannel`)\n"
+        "৩. অথবা চ্যানেল থেকে আবার একটি পোস্ট ফরওয়ার্ড করুন।"
+    )
     return STEP_CHANNEL
 
 # --- Step 1: Emoji ---
