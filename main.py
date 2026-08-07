@@ -78,15 +78,13 @@ def get_user_data(user_id):
         save_data(db)
     return db["users"][str_id]
 
-# 📱 কিবোর্ড লেআউট
-def get_user_keyboard(user_id):
+# 📱 কিবোর্ড লেআউট (অ্যাডমিন বাটন সম্পূর্ণ বাদ দেওয়া হয়েছে)
+def get_user_keyboard():
     kb = [
         [KeyboardButton("➕ অটো রিয়্যাকশন প্রজেক্ট যোগ করুন")],
         [KeyboardButton("📁 আমার প্রকল্প"), KeyboardButton("⚙️ আরও")],
         [KeyboardButton("🌟 পরিকল্পনা এবং ভারসাম্য"), KeyboardButton("💰 রিচার্জ করুন")]
     ]
-    if user_id in ADMIN_IDS:
-        kb.append([KeyboardButton("👑 অ্যাডমিন প্যানেল")])
     return ReplyKeyboardMarkup(kb, resize_keyboard=True)
 
 def get_admin_keyboard():
@@ -111,15 +109,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     get_user_data(user.id)
     await update.message.reply_text(
         f"👋 **স্বাগতম {user.first_name}!**\n\nঅটো রিয়্যাকশন প্রজেক্ট তৈরি করতে নিচের **'➕ অটো রিয়্যাকশন প্রজেক্ট যোগ করুন'** বাটন চাপুন:",
-        reply_markup=get_user_keyboard(user.id),
+        reply_markup=get_user_keyboard(),
         parse_mode='Markdown'
     )
 
-# 👑 Admin Panel
+# 👑 Admin Panel Access (শুধুমাত্র 'অ্যাডমিন' লিখলে বা /admin দিলে চালু হবে)
 async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in ADMIN_IDS:
-        await update.message.reply_text("❌ এই কমান্ডটি শুধু মাত্র অ্যাডমিনদের জন্য!")
+        await update.message.reply_text("❌ আপনি অ্যাডমিন নন!")
         return
 
     text = (
@@ -151,7 +149,7 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"───────────────────\n\n"
         f"১) **@{BOT_USERNAME}** কে আপনার চ্যানেলে **Admin** হিসেবে যোগ করুন।\n\n"
         f"২) এরপর চ্যানেলের যেকোনো **১টি পোস্ট ফরওয়ার্ড (Forward) করে** এখানে পাঠান\n"
-        f"অথবা ইউজারনেম/লিংক লিখে পাঠান:"
+        f"অথবা চ্যানেলের ইউজারনেম/লিংক লিখে পাঠান (যেমন: `@Sahadot_Reaction_Vip`):"
     )
     await update.message.reply_text(text, parse_mode='Markdown', reply_markup=cancel_keyboard())
     return STEP_CHANNEL
@@ -162,15 +160,15 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
 
     if txt in ["❌ বাতিল করুন", "বাতিল করুন", "🔙 ব্যাক"]:
-        await msg.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard(update.effective_user.id))
+        await msg.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
     target_chat = None
 
-    # ১. ফরওয়ার্ড মেসেজ চেক
+    # ১. ফরওয়ার্ড করা পোস্ট থেকে
     if msg.forward_from_chat:
         target_chat = msg.forward_from_chat
-    # ২. টেক্সট/লিংক চেক
+    # ২. ইউজারনেম বা লিংক থেকে
     elif txt:
         clean_text = txt.strip()
         if "t.me/" in clean_text:
@@ -179,13 +177,12 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             clean_text = "@" + clean_text
 
         try:
-            # ৩ সেকেন্ডের মধ্যে রেসপন্স না পেলে ক্যাচ করবে
             target_chat = await asyncio.wait_for(context.bot.get_chat(clean_text), timeout=5.0)
-        except Exception as err:
+        except Exception:
             await msg.reply_text(
                 f"❌ **চ্যানেল সংযুক্ত করা যায়নি!**\n\n"
-                f"👉 **সবচেয়ে সহজ উপায়:** আপনার চ্যানেল থেকে যেকোনো একটি পোস্ট সরাসরি এই বটে **Forward** করে পাঠাই দিন।\n\n"
-                f"⚠️ **অথবা নিশ্চিত করুন:** বটটি চ্যানেলে **Admin** রয়েছে।"
+                f"📌 **সবচেয়ে সহজ উপায়:** আপনার চ্যানেল থেকে যেকোনো ১টি পোস্ট সরাসরি এই বটে **Forward** করে পাঠিয়ে দিন।\n\n"
+                f"⚠️ **অথবা নিশ্চিত করুন:** বটটি চ্যানেলে **Admin** হিসেবে যুক্ত আছে।"
             )
             return STEP_CHANNEL
 
@@ -429,19 +426,19 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"😊 **ইমোজি:** {' '.join(temp['emojis'])}\n"
         f"🚀 **প্রতিক্রিয়া:** {temp['count']}\n\n"
         f"এখন এই চ্যানেলে নতুন কোনো পোস্ট দিলেই স্বয়ংক্রিয়ভাবে প্রতিক্রিয়া পাঠানো হবে।",
-        reply_markup=get_user_keyboard(query.from_user.id), parse_mode='Markdown'
+        reply_markup=get_user_keyboard(), parse_mode='Markdown'
     )
     return ConversationHandler.END
 
 async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if update.callback_query:
-        await update.callback_query.message.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard(user_id))
+        await update.callback_query.message.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
     else:
-        await update.message.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard(user_id))
+        await update.message.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
     return ConversationHandler.END
 
-# 👑 Admin Handlers
+# 👑 Admin Features
 async def start_add_credit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
     await update.message.reply_text("➕ **ক্রেডিট দিতে লিখে পাঠান:** `User_ID Amount`\nযেমন: `7973059882 100`", parse_mode='Markdown')
@@ -525,9 +522,13 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     u_data = get_user_data(str_id)
 
-    # Admin Control
+    # 👑 'অ্যাডমিন' বা 'admin' লিখলে অ্যাডমিন প্যানেল ওপেন হবে
+    if text.strip().lower() in ["অ্যাডমিন", "admin"]:
+        return await admin_panel_command(update, context)
+
+    # Admin Control Panel Buttons
     if user_id in ADMIN_IDS:
-        if text in ["👑 অ্যাডমিন প্যানেল", "📊 বট স্ট্যাটাস"]:
+        if text == "📊 বট স্ট্যাটাস":
             return await admin_panel_command(update, context)
         elif text == "📋 ইউজার লিস্ট":
             u_list = "📋 **ইউজার তালিকা:**\n───────────────────\n"
@@ -535,7 +536,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 u_list += f"🆔 `{uid}` | 💎 ক্রেডিট: {uinfo.get('credit', 0)}\n"
             return await update.message.reply_text(u_list, parse_mode='Markdown', reply_markup=get_admin_keyboard())
         elif text == "🏠 প্রধান মেনু":
-            return await update.message.reply_text("🏠 প্রধান মেনু:", reply_markup=get_user_keyboard(user_id))
+            return await update.message.reply_text("🏠 প্রধান মেনু:", reply_markup=get_user_keyboard())
 
     if text == "🌟 পরিকল্পনা এবং ভারসাম্য":
         p_count = len(u_data.get('projects', []))
