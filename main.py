@@ -145,7 +145,7 @@ async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
     await update.message.reply_text(text, parse_mode='Markdown', reply_markup=get_admin_keyboard())
 
-# --- Step 0: Channel Setup (Temporary Context Storage Only) ---
+# --- Step 0: Channel Setup (Always Proceeds to Next Step) ---
 async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = get_user_data(user_id)
@@ -156,9 +156,11 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ **আপনার পর্যাপ্ত ক্রেডিট নেই!**\nনতুন প্রজেক্ট তৈরি করতে রিচার্জ করুন।", parse_mode='Markdown', reply_markup=inline_kb)
         return ConversationHandler.END
 
+    # ড্রাফট সেটআপ
     context.user_data['draft_project'] = {
         "channel_name": None,
         "channel_id": None,
+        "raw_input": None,
         "emojis": ["❤️", "👍", "🔥", "💯"],
         "count": 20,
         "dist": "এলোমেলো",
@@ -185,10 +187,10 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
-    channel_title = None
+    channel_title = "চ্যানেল"
     channel_id = None
 
-    # ১. ফরওয়ার্ড মেসেজ থেকে আইডি ও টাইটেল নেওয়া
+    # ১. ফরওয়ার্ড মেসেজ থেকে চেষ্টা করা
     if msg.forward_from_chat:
         channel_title = msg.forward_from_chat.title or "Telegram Channel"
         channel_id = str(msg.forward_from_chat.id)
@@ -196,48 +198,39 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         channel_title = msg.forward_origin.chat.title or "Telegram Channel"
         channel_id = str(msg.forward_origin.chat.id)
 
-    # ২. টেক্সট (ইউজারনেম বা লিংক) থেকে ডিটেক্ট করা
+    # ২. টেক্সট/লিংক ইনপুট ধরে নেওয়া (যেটাই দিক না কেন, প্রসেস সামনে বাড়াবে)
     if not channel_id and txt:
         clean_text = txt
         if "t.me/" in clean_text:
             match = re.search(r"t\.me/(?:c/)?([^/]+)", clean_text)
             if match:
                 extracted = match.group(1)
-                if extracted.isdigit():
-                    channel_id = f"-100{extracted}"
-                    channel_title = f"Private Channel ({extracted})"
-                else:
-                    clean_text = "@" + extracted
-
-        if not channel_id:
-            if not clean_text.startswith("@") and not clean_text.startswith("-100"):
-                clean_text = "@" + clean_text
-
-            try:
-                chat = await context.bot.get_chat(clean_text)
-                channel_title = chat.title or "Telegram Channel"
-                channel_id = str(chat.id)
-            except Exception:
-                # যদি টেলিগ্রাম এপিআই কোনো কারণে অফ থাকে, তবুও কাস্টম টাইটেল ধরে প্রসেস চালু রাখবে
-                channel_title = txt.split("/")[-1].replace("@", "")
-                channel_id = f"chan_{abs(hash(txt))}"
-
-    if channel_id and channel_title:
-        context.user_data['draft_project']['channel_name'] = channel_title
-        context.user_data['draft_project']['channel_id'] = channel_id
-
-        confirm_text = (
-            f"✅ **চ্যানেল সংযুক্ত হয়েছে!**\n\n"
-            f"📺 **চ্যানেল:** {channel_title}\n"
-            f"🆔 **আইডি:** `{channel_id}`"
-        )
-        await msg.reply_text(confirm_text, parse_mode='Markdown')
+                clean_text = extracted if extracted.isdigit() else "@" + extracted
         
-        # সঙ্গে সঙ্গে ধাপ ১ (ইমোজি নির্বাচন) ওপেন করবে
-        return await render_emoji_menu(update, context)
+        try:
+            chat = await context.bot.get_chat(clean_text)
+            channel_title = chat.title or clean_text
+            channel_id = str(chat.id)
+        except Exception:
+            # বট কানেক্টেড না থাকলেও অপশন আসবে!
+            channel_title = txt.split("/")[-1]
+            if not channel_title.startswith("@"): channel_title = "@" + channel_title
+            channel_id = clean_text
 
-    await msg.reply_text("❌ চ্যানেলটি শনাক্ত করা যায়নি! দয়া করে সঠিক লিংক বা ইউজারনেম পাঠান অথবা চ্যানেল থেকে একটি পোস্ট ফরওয়ার্ড করুন।")
-    return STEP_CHANNEL
+    # ড্রাফটে সেভ করে রাখা
+    context.user_data['draft_project']['channel_name'] = channel_title
+    context.user_data['draft_project']['channel_id'] = channel_id
+    context.user_data['draft_project']['raw_input'] = txt
+
+    confirm_text = (
+        f"✅ **চ্যানেল সাময়িকভাবে গৃহীত হয়েছে!**\n\n"
+        f"📺 **চ্যানেল/লিঙ্ক:** {channel_title}\n"
+        f"📌 *চূড়ান্ত ধাপে 'প্রকল্প তৈরি করুন' এ চাপলে ডাটাবেজে যুক্ত হবে।*"
+    )
+    await msg.reply_text(confirm_text, parse_mode='Markdown')
+
+    # কোনো বাধা ছাড়াই ধাপ ১ (ইমোজি নির্বাচন)-এ নিয়ে যাওয়া
+    return await render_emoji_menu(update, context)
 
 # --- Step 1: Emoji Choice ---
 async def render_emoji_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -250,7 +243,7 @@ async def render_emoji_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"───────────────────\n\n"
         f"📺 **চ্যানেল:** {draft.get('channel_name', 'অজ্ঞাত')}\n"
         f"👉 **বর্তমান নির্বাচিত ইমোজি:** {selected}\n\n"
-        f"নিচের থেকে আপনার পছন্দের ইমোজি বেছে নিন:"
+        f"ইমোজি বেছে নিয়ে **'✅ সম্পন্ন'** চাপুন:"
     )
     
     keyboard = [
@@ -412,7 +405,7 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"│ ⚡ গতি: {draft.get('speed')}\n"
         f"│ ⚙️ বিতরণ: {draft.get('dist')}\n"
         f"└────────────────────\n\n"
-        f"⚠️ **'✅ প্রকল্প তৈরি করুন'** বাটনে চাপ দিলেই ডাটাবেজে সেভ হবে ও চ্যানেলে অটো রিয়্যাকশন সক্রিয় হবে।"
+        f"⚠️ **'✅ প্রকল্প তৈরি করুন'** বাটনে চাপ দিলেই ডাটাবেজে সেভ হবে ও চ্যানেলের সাথে কানেক্ট হবে।"
     )
     keyboard = [
         [InlineKeyboardButton("✅ প্রকল্প তৈরি করুন", callback_data="create_final")],
@@ -421,7 +414,7 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return STEP_REVIEW
 
-# 💾 Final Save to Database
+# 💾 Final Save & Database Connection
 async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -429,24 +422,41 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(user_id)
     
     draft = context.user_data.get('draft_project')
-    if not draft or not draft.get('channel_id'):
+    if not draft:
         await query.message.reply_text("❌ কোনো তথ্য পাওয়া যায়নি! নতুন করে চেষ্টা করুন।", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
-    u_data['projects'] = [p for p in u_data.get('projects', []) if str(p.get('channel_id')) != str(draft['channel_id'])]
+    # 'প্রকল্প তৈরি করুন' এ ক্লিক করার পরই চ্যানেল আইডি কনফার্ম করা
+    final_channel_id = draft.get('channel_id')
+    final_channel_name = draft.get('channel_name')
 
-    # ডাটাবেজে ডাটা সংরক্ষণ
+    # টেলিগ্রাম থেকে সঠিক আইডি বের করার শেষ চেষ্টা
+    try:
+        chat_info = await context.bot.get_chat(draft.get('raw_input') or final_channel_id)
+        final_channel_id = str(chat_info.id)
+        final_channel_name = chat_info.title or final_channel_name
+    except Exception:
+        pass
+
+    draft['channel_id'] = final_channel_id
+    draft['channel_name'] = final_channel_name
+
+    # একই চ্যানেলের আগের প্রজেক্ট থাকলে রিপ্লেস করা
+    u_data['projects'] = [p for p in u_data.get('projects', []) if str(p.get('channel_id')) != str(final_channel_id)]
+
+    # 💾 এখানেই ডাটাবেজে কানেক্ট ও সেভ হচ্ছে
     u_data['projects'].append(draft)
     save_data(db)
 
     context.user_data.pop('draft_project', None)
 
     await query.message.reply_text(
-        f"🎉 **প্রকল্প সফলভাবে সেভ করা হয়েছে!**\n\n"
-        f"📁 **চ্যানেল:** {draft['channel_name']}\n"
+        f"🎉 **প্রকল্প সফলভাবে তৈরি ও ডাটাবেজে সেভ হয়েছে!**\n\n"
+        f"📁 **চ্যানেল:** {final_channel_name}\n"
+        f"🆔 **আইডি:** `{final_channel_id}`\n"
         f"😊 **ইমোজি:** {' '.join(draft['emojis'])}\n"
         f"🚀 **প্রতিক্রিয়া:** {draft['count']}\n\n"
-        f"এখন থেকে এই চ্যানেলে নতুন যেকোনো পোস্টে অটো রিয়্যাকশন চলে যাবে।",
+        f"এখন চ্যানেলে নতুন পোস্ট করার সাথে সাথে অটো রিয়্যাকশন কানেক্ট হয়ে যাবে।",
         reply_markup=get_user_keyboard(), parse_mode='Markdown'
     )
     return ConversationHandler.END
