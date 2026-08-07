@@ -3,6 +3,7 @@ import random
 import os
 import json
 import asyncio
+from datetime import datetime
 from threading import Thread
 from flask import Flask
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup, ReactionTypeEmoji
@@ -78,7 +79,7 @@ def get_user_data(user_id):
         save_data(db)
     return db["users"][str_id]
 
-# 📱 কিবোর্ড লেআউট (অ্যাডমিন বাটন সম্পূর্ণ বাদ দেওয়া হয়েছে)
+# 📱 কিবোর্ড লেআউট
 def get_user_keyboard():
     kb = [
         [KeyboardButton("➕ অটো রিয়্যাকশন প্রজেক্ট যোগ করুন")],
@@ -106,6 +107,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 আপনাকে এই বট থেকে ব্লক করা হয়েছে।")
         return
 
+    # রেফারেল হ্যান্ডলিং
+    if context.args and len(context.args) > 0:
+        referrer_id = context.args[0]
+        if referrer_id != str_id and referrer_id in db["users"] and str_id not in db["users"]:
+            db["users"][referrer_id]["ref_count"] += 1
+            db["users"][referrer_id]["credit"] += 20
+            db["users"][referrer_id]["ref_credit"] += 20
+            save_data(db)
+
     get_user_data(user.id)
     await update.message.reply_text(
         f"👋 **স্বাগতম {user.first_name}!**\n\nঅটো রিয়্যাকশন প্রজেক্ট তৈরি করতে নিচের **'➕ অটো রিয়্যাকশন প্রজেক্ট যোগ করুন'** বাটন চাপুন:",
@@ -113,7 +123,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-# 👑 Admin Panel Access (শুধুমাত্র 'অ্যাডমিন' লিখলে বা /admin দিলে চালু হবে)
+# 👑 Admin Panel Access ('অ্যাডমিন' বা /admin লিখলে খুলবে)
 async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in ADMIN_IDS:
@@ -165,10 +175,8 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     target_chat = None
 
-    # ১. ফরওয়ার্ড করা পোস্ট থেকে
     if msg.forward_from_chat:
         target_chat = msg.forward_from_chat
-    # ২. ইউজারনেম বা লিংক থেকে
     elif txt:
         clean_text = txt.strip()
         if "t.me/" in clean_text:
@@ -181,7 +189,7 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             await msg.reply_text(
                 f"❌ **চ্যানেল সংযুক্ত করা যায়নি!**\n\n"
-                f"📌 **সবচেয়ে সহজ উপায়:** আপনার চ্যানেল থেকে যেকোনো ১টি পোস্ট সরাসরি এই বটে **Forward** করে পাঠিয়ে দিন।\n\n"
+                f"📌 **সবচেয়ে সহজ উপায়:** আপনার চ্যানেল থেকে যেকোনো ১টি পোস্ট সরাসরি এই বটে **Forward** করে বানিয়ে পাঠিয়ে দিন।\n\n"
                 f"⚠️ **অথবা নিশ্চিত করুন:** বটটি চ্যানেলে **Admin** হিসেবে যুক্ত আছে।"
             )
             return STEP_CHANNEL
@@ -515,6 +523,66 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
     except Exception as e:
         logging.error(f"Auto Reaction Error: {e}")
 
+# ⚙️ "আরও" এবং এর ইনলাইন বাটন হ্যান্ডলিং
+async def more_options_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    str_id = str(user_id)
+    u_data = get_user_data(user_id)
+    data = query.data
+
+    if data == "more_profile":
+        text = (
+            f"👤 **ইউজার প্রোফাইল**\n───────────────────\n"
+            f"🆔 **আইডি:** `{str_id}`\n"
+            f"💎 **ক্রেডিট:** `{u_data['credit']}`\n"
+            f"📁 **প্রকল্প সংখ্যা:** `{len(u_data['projects'])}`\n"
+            f"👥 **মোট রেফার:** `{u_data['ref_count']}`\n"
+            f"💰 **রেফার আয়:** `{u_data['ref_credit']}` ক্রেডিট"
+        )
+        await query.edit_message_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 ব্যাক", callback_data="more_back")]]))
+
+    elif data == "more_bonus":
+        today = datetime.now().strftime("%Y-%m-%d")
+        if u_data.get("last_daily_bonus") == today:
+            await query.answer("⚠️ আপনি আজকের দৈনিক বোনাস ইতোমধ্যেই গ্রহণ করেছেন!", show_alert=True)
+        else:
+            u_data["credit"] += 10
+            u_data["last_daily_bonus"] = today
+            save_data(db)
+            await query.answer("🎉 আপনি ১০ ক্রেডিট দৈনিক বোনাস পেয়েছেন!", show_alert=True)
+            text = f"🎁 **দৈনিক বোনাস সফল!**\n\nআপনি ১০ ক্রেডিট পেয়েছেন।\nবর্তমান ক্রেডিট: `{u_data['credit']}`"
+            await query.edit_message_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 ব্যাক", callback_data="more_back")]]))
+
+    elif data == "more_refer":
+        ref_link = f"https://t.me/{BOT_USERNAME}?start={str_id}"
+        text = (
+            f"🔗 **রেফারেল প্রোগ্রাম**\n───────────────────\n"
+            f"আপনার বন্ধুদের আপনার রেফারেল লিংক ব্যবহার করে যুক্ত হতে বলুন এবং প্রতি সফল রেফারে **২০ ফ্রি ক্রেডিট** পান!\n\n"
+            f"📌 **আপনার লিঙ্ক:**\n`{ref_link}`"
+        )
+        await query.edit_message_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 ব্যাক", callback_data="more_back")]]))
+
+    elif data == "more_help":
+        clean_admin = ADMIN_USERNAME.replace("@", "")
+        text = (
+            f"🆘 **সহায়তা ও সাপোর্ট**\n───────────────────\n"
+            f"আপনার কোনো সমস্যা বা প্রশ্ন থাকলে সরাসরি আমাদের অ্যাডমিনের সাথে যোগাযোগ করুন।"
+        )
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("💬 অ্যাডমিনকে মেসেজ দিন", url=f"https://t.me/{clean_admin}")],
+            [InlineKeyboardButton("🔙 ব্যাক", callback_data="more_back")]
+        ])
+        await query.edit_message_text(text, parse_mode='Markdown', reply_markup=keyboard)
+
+    elif data == "more_back":
+        keyboard = [
+            [InlineKeyboardButton("👤 প্রোফাইল", callback_data="more_profile"), InlineKeyboardButton("🎁 দৈনিক বোনাস", callback_data="more_bonus")],
+            [InlineKeyboardButton("🔗 রেফারেল লিংক", callback_data="more_refer"), InlineKeyboardButton("🆘 সহায়তা", callback_data="more_help")]
+        ]
+        await query.edit_message_text("⚙️ **অতিরিক্ত অপশনসমূহ:**\nনিচের অপশনগুলো থেকে বেছে নিন:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
 # 📌 মেইন মেনু নেভিগেশন
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -522,7 +590,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     u_data = get_user_data(str_id)
 
-    # 👑 'অ্যাডমিন' বা 'admin' লিখলে অ্যাডমিন প্যানেল ওপেন হবে
+    # 👑 'অ্যাডমিন' বা 'admin'
     if text.strip().lower() in ["অ্যাডমিন", "admin"]:
         return await admin_panel_command(update, context)
 
@@ -538,7 +606,14 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif text == "🏠 প্রধান মেনু":
             return await update.message.reply_text("🏠 প্রধান মেনু:", reply_markup=get_user_keyboard())
 
-    if text == "🌟 পরিকল্পনা এবং ভারসাম্য":
+    if text == "⚙️ আরও":
+        keyboard = [
+            [InlineKeyboardButton("👤 প্রোফাইল", callback_data="more_profile"), InlineKeyboardButton("🎁 দৈনিক বোনাস", callback_data="more_bonus")],
+            [InlineKeyboardButton("🔗 রেফারেল লিংক", callback_data="more_refer"), InlineKeyboardButton("🆘 সহায়তা", callback_data="more_help")]
+        ]
+        await update.message.reply_text("⚙️ **অতিরিক্ত অপশনসমূহ:**\nনিচের অপশনগুলো থেকে বেছে নিন:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
+    elif text == "🌟 পরিকল্পনা এবং ভারসাম্য":
         p_count = len(u_data.get('projects', []))
         await update.message.reply_text(f"💎 **বর্তমান ক্রেডিট:** {u_data['credit']}\n📁 **সক্রিয় প্রকল্প:** {p_count}", parse_mode='Markdown')
     
@@ -589,6 +664,7 @@ if __name__ == '__main__':
     app.add_handler(conv_handler)
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
+    app.add_handler(CallbackQueryHandler(more_options_callback, pattern="^more_"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
     app.add_handler(MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post))
 
