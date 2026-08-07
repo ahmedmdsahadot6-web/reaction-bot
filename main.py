@@ -26,7 +26,7 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# ⚠️ আপনার বটের Token ও Username
+# ⚠️ বটের Token ও Username
 BOT_TOKEN = "8895135409:AAHpo18y1o74_g1XBeTMO7CCpjj0NYfjWHA"
 BOT_USERNAME = "Sahadot_reaction123_bot"
 
@@ -109,16 +109,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = get_user_data(user_id)
-    
     u_data['temp_emojis'] = []
     
     text = (
         f"🛰 **ধাপ 0 • চ্যানেল সেটআপ**\n"
         f"───────────────────\n\n"
-        f"1) 👤 @{BOT_USERNAME} কে প্রশাসক বানান\n"
-        f"2) 🆔 **পাঠান** চ্যানেল লিঙ্ক বা @username অথবা ID।\n"
-        f"🔄 **OR আপনার চ্যানেল থেকে একটি বার্তা ফরোয়ার্ড করুন**\n"
-        f"(ফরোয়ার্ডিং ট্যাগ চালু)\n\n👇 👇"
+        f"1) 👤 @{BOT_USERNAME} কে আপনার চ্যানেলে প্রশাসক (Admin) বানান।\n"
+        f"2) 🆔 আপনার চ্যানেলের **লিঙ্ক / ইউজারনেম** লিখে পাঠান অথবা চ্যানেল থেকে যেকোনো একটি পোস্ট **ফরোয়ার্ড করুন**।\n\n👇 👇"
     )
     await update.message.reply_text(text, parse_mode='Markdown', reply_markup=cancel_keyboard())
     return STEP_CHANNEL
@@ -134,26 +131,25 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         u_data['channel_id'] = update.message.text
 
     text = (
-        f"👍 চ্যানেল সফলভাবে যোগ করা হয়েছে! সনাক্ত করা প্রকার: PUBLIC\n\n"
-        f"📋 চ্যানেলের বিবরণ:\n"
+        f"👍 **চ্যানেল সফলভাবে সনাক্ত করা হয়েছে!**\n\n"
+        f"📋 **চ্যানেলের বিবরণ:**\n"
         f"───────────────────\n"
-        f"📺 চ্যানেলের নাম: {u_data['channel_name']}\n"
-        f"🆔 চ্যানেল আইডি: {u_data['channel_id']}\n"
+        f"📺 **নাম/লিংক:** {u_data['channel_name']}\n"
         f"───────────────────"
     )
-    await update.message.reply_text(text, reply_markup=cancel_keyboard())
+    await update.message.reply_text(text, parse_mode='Markdown')
     return await ask_emoji(update, context)
 
 async def ask_emoji(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
-    selected = ", ".join(u_data['temp_emojis']) if u_data['temp_emojis'] else "(none)"
+    selected = ", ".join(u_data['temp_emojis']) if u_data['temp_emojis'] else "(কোনোটিই নয়)"
     
     text = (
         f"📝 **ধাপ 1 • ইমোজি নির্বাচন করুন**\n"
         f"───────────────────\n\n"
         f"আপনার পোস্টের জন্য প্রতিক্রিয়া চয়ন করুন।\n\n"
         f"**নির্বাচিত ({len(u_data['temp_emojis'])}):** {selected}\n\n"
-        f"🌟 ইমোজিতে আলতো চাপুন/remove যোগ করতে। ✅ সম্পন্ন হলে ট্যাপ করুন।"
+        f"🌟 যেকোনো ইমোজিতে চাপ দিলে যোগ বা রিমুভ হবে। ✅ সম্পন্ন হলে নিচে 'সম্পন্ন' চাপুন।"
     )
     
     keyboard = [
@@ -193,8 +189,8 @@ async def ask_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"📊 **ধাপ 2 • মোট প্রতিক্রিয়া**\n"
         f"───────────────────\n\n"
-        f"প্রতি পোস্টে কত প্রতিক্রিয়া?\n\n"
-        f"🌟 একটি প্রিসেট চয়ন করুন। 👉 **বর্তমান নির্বাচন: {u_data['selected_count']} প্রতিক্রিয়া**"
+        f"প্রতি পোস্টে কত প্রতিক্রিয়া দিতে চান?\n\n"
+        f"👉 **বর্তমান নির্বাচন:** {u_data['selected_count']} প্রতিক্রিয়া"
     )
     keyboard = [
         [InlineKeyboardButton("10", callback_data="cnt_10"), InlineKeyboardButton("20", callback_data="cnt_20"), InlineKeyboardButton("30", callback_data="cnt_30")],
@@ -224,9 +220,9 @@ async def ask_distribution(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"⚙️ **ধাপ 3 • বিতরণের ধরন**\n"
         f"───────────────────\n\n"
-        f"প্রতিক্রিয়া কি প্যাটার্ন অনুসরণ করা উচিত?\n"
-        f"🎲 **এলোমেলো** - প্রতিটি ইমোজি পায় ভিন্ন ভিন্ন সংখ্যা\n"
-        f"⚖️ **সব সমানভাবে** - প্রতিটি ইমোজি ঠিক সমান সংখ্যা পায়"
+        f"প্রতিক্রিয়া কি প্যাটার্ন অনুসরণ করা উচিত?\n\n"
+        f"🎲 **এলোমেলো** - প্রতিটি ইমোজি পাবে ভিন্ন ভিন্ন সংখ্যা\n"
+        f"⚖️ **সব সমানভাবে** - প্রতিটি ইমোজি পাবে সমান সংখ্যা"
     )
     keyboard = [
         [InlineKeyboardButton("🎲 এলোমেলো", callback_data="dist_এলোমেলো")],
@@ -252,7 +248,7 @@ async def distribution_callback(update: Update, context: ContextTypes.DEFAULT_TY
 async def ask_speed(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
     text = (
-        f"⚡ **STEP 4 • গতি নির্বাচন**\n"
+        f"⚡ **ধাপ 4 • গতি নির্বাচন**\n"
         f"───────────────────\n\n"
         f"🚀 ডেলিভারি গতি নির্বাচন করুন:\n\n"
         f"👉 **নির্বাচিত:** ⚡ {u_data['selected_speed']} ডেলিভারি"
@@ -280,9 +276,9 @@ async def speed_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def ask_views(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(update.effective_user.id)
     text = (
-        f"👁 **STEP 5 • ভিউ কনফিগারেশন**\n"
+        f"👁 **ধাপ 5 • ভিউ কনফিগারেশন**\n"
         f"───────────────────\n\n"
-        f"প্রতি পোস্টে কত ভিউ?\n\n"
+        f"প্রতি পোস্টে কত ভিউ দিতে চান?\n\n"
         f"👉 **নির্বাচিত:** {u_data['selected_views'] if u_data['selected_views'] > 0 else 'কোনো ভিউ নেই'}"
     )
     keyboard = [
@@ -454,13 +450,20 @@ if __name__ == '__main__':
     conv_handler = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^➕ অটো রিয়্যাকশন প্রজেক্ট যোগ করুন$"), start_project)],
         states={
-            STEP_CHANNEL: [MessageHandler(filters.TEXT & ~filters.Regex("^(বাতিল করুন|🔙 ব্যাক)$"), save_channel), MessageHandler(filters.FORWARDED, save_channel)],
+            STEP_CHANNEL: [
+                MessageHandler(filters.TEXT & ~filters.Regex("^(বাতিল করুন|🔙 ব্যাক)$"), save_channel),
+                MessageHandler(filters.FORWARDED, save_channel)
+            ],
             STEP_EMOJI: [CallbackQueryHandler(emoji_callback, pattern="^em_")],
             STEP_COUNT: [CallbackQueryHandler(count_callback, pattern="^(cnt_|back_emoji|locked)")],
             STEP_DISTRIBUTION: [CallbackQueryHandler(distribution_callback, pattern="^(dist_|back_count)")],
             STEP_SPEED: [CallbackQueryHandler(speed_callback, pattern="^(spd_|back_dist)")],
             STEP_VIEWS: [CallbackQueryHandler(views_callback, pattern="^(vw_|back_speed)")],
-            STEP_REVIEW: [CallbackQueryHandler(finalize_project, pattern="^create_final"), CallbackQueryHandler(ask_views, pattern="^back_views"), CallbackQueryHandler(cancel_flow, pattern="^cancel_flow")]
+            STEP_REVIEW: [
+                CallbackQueryHandler(finalize_project, pattern="^create_final"),
+                CallbackQueryHandler(ask_views, pattern="^back_views"),
+                CallbackQueryHandler(cancel_flow, pattern="^cancel_flow")
+            ]
         },
         fallbacks=[MessageHandler(filters.Regex("^(বাতিল করুন|🔙 ব্যাক)$"), cancel_flow)]
     )
