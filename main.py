@@ -213,7 +213,7 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if target_chat:
         target_id_str = str(target_chat.id)
 
-        # 🔒 চ্যানেল ডুপ্লিকেট সিকিউরিটি চেক: অন্য কেউ এই চ্যানেল ইতোমধ্যে যুক্ত করেছে কি না
+        # 🔒 চ্যানেল ডুপ্লিকেট চেকিং
         for uid, info in db["users"].items():
             for proj in info.get("projects", []):
                 if str(proj.get("channel_id")) == target_id_str and str(uid) != str(user_id):
@@ -237,6 +237,7 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"───────────────────"
         )
         await msg.reply_text(confirm_text, parse_mode='Markdown')
+        # চ্যানেল নিশ্চিত হওয়ার পর ইমোজি মেনু কল করা হচ্ছে
         return await render_emoji_menu(update, context)
 
     return STEP_CHANNEL
@@ -445,7 +446,6 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = get_user_data(user_id)
     temp = u_data['temp_project']
 
-    # যদি কোনো প্রজেক্ট পূর্বে একই চ্যানেলে থাকে, সেটি আপডেট করা হবে
     u_data['projects'] = [p for p in u_data.get('projects', []) if str(p.get('channel_id')) != str(temp['channel_id'])]
 
     new_proj = {
@@ -538,11 +538,9 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
         
         channel_id = str(message.chat_id)
 
-        # ডাটাবেজে সঠিক প্রজেক্টটি খুঁজে বের করা
         for uid, uinfo in db["users"].items():
             for proj in uinfo.get("projects", []):
                 if str(proj.get("channel_id")) == channel_id:
-                    # ইউজার ক্রেডিট চেক
                     if uinfo.get("credit", 0) <= 0:
                         try:
                             clean_admin = ADMIN_USERNAME.replace("@", "")
@@ -560,14 +558,12 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                     target_emojis = proj.get("emojis", ["👍"])
                     chosen_emoji = random.choice(target_emojis) if target_emojis else "👍"
                     
-                    # চ্যানেলের পোস্টে রিয়্যাকশন দেওয়া
                     await context.bot.set_message_reaction(
                         chat_id=message.chat_id,
                         message_id=message.message_id,
                         reaction=[ReactionTypeEmoji(emoji=chosen_emoji)]
                     )
 
-                    # ক্রেডিট কাটা
                     uinfo["credit"] -= 1
                     save_data(db)
                     return
@@ -581,7 +577,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     u_data = get_user_data(str_id)
 
-    if text.strip().lower() in ["অ্যাডমিন", "admin"]:
+    if text and text.strip().lower() in ["অ্যাডমিন", "admin"]:
         return await admin_panel_command(update, context)
 
     if user_id in ADMIN_IDS:
@@ -634,7 +630,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "🆘 সহায়তা":
         clean_admin = ADMIN_USERNAME.replace("@", "")
         inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 অ্যাডমিনকে মেসেজ দিন", url=f"https://t.me/{clean_admin}")]])
-        await update.message.reply_text(f"🆘 **সহায়তা ও সাপোর্ট**\n───────────────────\nআপনার কোনো समस्या বা প্রশ্ন থাকলে সরাসরি আমাদের অ্যাডমিনের সাথে যোগাযোগ করুন।", parse_mode='Markdown', reply_markup=inline_kb)
+        await update.message.reply_text(f"🆘 **সহায়তা ও সাপোর্ট**\n───────────────────\nআপনার কোনো সমস্যা বা প্রশ্ন থাকলে সরাসরি আমাদের অ্যাডমিনের সাথে যোগাযোগ করুন।", parse_mode='Markdown', reply_markup=inline_kb)
 
     elif text == "🌟 পরিকল্পনা এবং ভারসাম্য":
         p_count = len(u_data.get('projects', []))
@@ -667,6 +663,7 @@ if __name__ == '__main__':
             MessageHandler(filters.Regex("^📢 অল ইউজার ব্রডকাস্ট$"), start_broadcast),
         ],
         states={
+            # 🔧 মূল ফিক্স: এখানে filters.ALL দেওয়া হলো যেন ফরওয়ার্ড করা মেসেজও বটের কাছে সঠিকভাবে পৌঁছায়
             STEP_CHANNEL: [MessageHandler(filters.ALL & ~filters.COMMAND, save_channel)],
             STEP_EMOJI: [CallbackQueryHandler(emoji_callback, pattern="^(em_|em_done)")],
             STEP_COUNT: [CallbackQueryHandler(count_callback, pattern="^(cnt_|back_emoji|locked)")],
