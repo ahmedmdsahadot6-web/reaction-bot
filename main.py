@@ -351,8 +351,8 @@ def send_smm_reaction_order(post_link, count):
         response = requests.post(SMM_API_URL, data=payload, timeout=10)
         res_json = response.json()
         
-        if "order" in res_json:
-            return True, res_json["order"]
+        if "order" in res_json or "orders" in res_json:
+            return True, res_json.get("order", "Success")
         else:
             logging.error(f"SMM API Error Response: {res_json}")
             return False, res_json.get("error", "Unknown API error")
@@ -360,41 +360,35 @@ def send_smm_reaction_order(post_link, count):
         logging.error(f"SMM API Request Failed: {e}")
         return False, str(e)
 
-# 📢 অটো পোস্ট ট্রিগার (সম্পূর্ণ ফিক্সড পোস্ট হ্যান্ডলার)
+# 📢 অটো পোস্ট ট্রিগার
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        # চ্যানেল পোস্ট ক্যাচ করা
-        message = update.channel_post or update.effective_message
-        if not message or not message.chat:
+        msg = update.channel_post
+        if not msg:
             return
 
-        channel_id = str(message.chat.id)
-        chat = message.chat
-        
-        # পোস্ট লিংক তৈরি
+        channel_id = str(msg.chat.id)
+        chat = msg.chat
+
         if chat.username:
-            post_link = f"https://t.me/{chat.username}/{message.message_id}"
+            post_link = f"https://t.me/{chat.username}/{msg.message_id}"
         else:
-            # প্রাইভেট চ্যানেলের ক্ষেত্রে লিংক গঠন
             clean_cid = str(chat.id).replace("-100", "")
-            post_link = f"https://t.me/c/{clean_cid}/{message.message_id}"
+            post_link = f"https://t.me/c/{clean_cid}/{msg.message_id}"
 
         clean_admin = ADMIN_USERNAME.replace("@", "")
         admin_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("💬 অ্যাডমিনের সাথে যোগাযোগ করুন", url=f"https://t.me/{clean_admin}")]])
 
-        # ডাটাবেজ ফিল্টারিং ও অর্ডার পাঠানো
         for uid, uinfo in db["users"].items():
             for proj in uinfo.get("projects", []):
                 if str(proj.get("channel_id")) == channel_id:
                     
-                    # শর্ত ১: কয়েন চেক
                     if uinfo.get("credit", 0) <= 0:
                         try:
                             await context.bot.send_message(
                                 chat_id=int(uid),
                                 text=f"⚠️ **আপনার ব্যালেন্স শেষ!**\n\n"
-                                     f"আপনার `{proj.get('channel_name', 'চ্যানেলে')}` নতুন পোস্ট করা হলেও কয়েন না থাকায় রিয়্যাকশন পাঠানো যায়নি।\n"
-                                     f"নতুন পোস্টে অটো রিয়্যাকশন পেতে রিচার্জ করুন।",
+                                     f"আপনার `{proj.get('channel_name', 'চ্যানেলে')}` নতুন পোস্ট করা হলেও কয়েন না থাকায় রিয়্যাকশন পাঠানো যায়নি।",
                                 reply_markup=admin_keyboard
                             )
                         except Exception:
@@ -403,7 +397,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
 
                     target_count = proj.get("count", 10)
 
-                    # API রিকোয়েস্ট পাঠানো
                     success, result = await asyncio.to_thread(send_smm_reaction_order, post_link, target_count)
 
                     if success:
@@ -411,7 +404,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                         if uinfo["credit"] < 0: uinfo["credit"] = 0
                         save_data(db)
 
-                        # 🎉 নোটিফিকেশন মেসেজ
                         try:
                             await context.bot.send_message(
                                 chat_id=int(uid),
@@ -600,8 +592,9 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('admin', admin_panel_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
     
-    # চ্যানেল পোস্ট ডিটেক্টর হ্যান্ডলার (অল টাইপ মেসেজ ফিল্টার অন)
-    app.add_handler(MessageHandler(filters.ALL, auto_react_channel_post))
+    # চ্যানেল পোস্ট রিড করার জন্য নিখুঁত ফিল্টার
+    app.add_handler(MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post))
 
     print("🤖 SMM Reaction Bot Operational...")
-    app.run_polling(drop_pending_updates=True)
+    # 💥 এই লাইনটি ফিক্স করা হয়েছে: allowed_updates=Update.ALL_TYPES যোগ করে নিশ্চিত করা হয়েছে যেন Telegram channel posts মিস না করে
+    app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
