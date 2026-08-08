@@ -200,24 +200,26 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             channel_title = txt
 
+    # ড্রাফটে ডাটা রাখা
+    if 'draft_project' not in context.user_data:
+        context.user_data['draft_project'] = {}
+
     context.user_data['draft_project']['channel_name'] = channel_title
     context.user_data['draft_project']['channel_id'] = channel_id
     context.user_data['draft_project']['raw_input'] = txt
 
-    confirm_text = (
-        f"✅ চ্যানেল ইনপুট গ্রহণ করা হয়েছে!\n\n"
-        f"📺 চ্যানেল/লিঙ্ক: {channel_title}\n"
-        f"📌 শেষ ধাপে 'প্রকল্প তৈরি করুন' চাপলে ডাটাবেজে যুক্ত হবে।"
-    )
-    await msg.reply_text(confirm_text)
+    # কাস্টম মেসেজ পাঠানো
+    await msg.reply_text(f"✅ চ্যানেল লিংক গৃহীত হয়েছে!\n📺 চ্যানেল: {channel_title}")
 
+    # সরাসরি ধাপ ১ (ইমোজি নির্বাচন) মেনু প্রদর্শন
     return await render_emoji_menu(update, context)
 
 # --- Step 1: Emoji Choice ---
 async def render_emoji_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     draft = context.user_data.get('draft_project', {})
-    selected = " ".join(draft.get('emojis', [])) if draft.get('emojis') else "(কোনোটিই নয়)"
+    em_list = draft.get('emojis', ["❤️", "👍", "🔥", "💯"])
+    selected = " ".join(em_list) if em_list else "(কোনোটিই নয়)"
     
     text = (
         f"📝 ধাপ 1 • ইমোজি নির্বাচন করুন\n"
@@ -245,7 +247,8 @@ async def emoji_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     draft = context.user_data.get('draft_project', {})
-    
+    if 'emojis' not in draft: draft['emojis'] = ["❤️", "👍", "🔥", "💯"]
+
     data = query.data
     if data == "em_done":
         if not draft.get('emojis'): draft['emojis'] = ["👍"]
@@ -630,6 +633,7 @@ if __name__ == '__main__':
             MessageHandler(filters.Regex("^📢 অল ইউজার ব্রডকাস্ট$"), start_broadcast),
         ],
         states={
+            # filters.ALL ব্যবহার করা হয়েছে যাতে টেক্সট, লিংক, ফরওয়ার্ড পোস্ট - যা-ই আসুক সাথে সাথে STEP_EMOJI তে চলে যায়
             STEP_CHANNEL: [MessageHandler(filters.ALL & ~filters.COMMAND, save_channel)],
             STEP_EMOJI: [CallbackQueryHandler(emoji_callback, pattern="^(em_|em_done)")],
             STEP_COUNT: [CallbackQueryHandler(count_callback, pattern="^(cnt_|back_emoji|locked)")],
