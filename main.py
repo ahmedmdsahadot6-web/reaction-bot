@@ -34,7 +34,7 @@ def keep_alive():
 BOT_TOKEN = "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw"
 BOT_USERNAME = "Sahadot_reaction123_bot"
 ADMIN_IDS = [7973059882, 8454401183]
-ADMIN_USERNAME = "@MDsahadot1685"  # সাপোর্ট ও রিচার্জের জন্য আপডেট করা ইউজারনেম
+ADMIN_USERNAME = "@MDsahadot1685"
 
 # 🌐 SMM Panel API settings
 SMM_API_URL = "https://smmmain.com/api/v2"
@@ -73,7 +73,7 @@ def get_user_data(user_id):
     str_id = str(user_id)
     if str_id not in db["users"]:
         db["users"][str_id] = {
-            "credit": 150,  # সাইনআপ/লগইন বোনাস ১৫০ কয়েন (একবারই)
+            "credit": 150,  # সাইনআপ/লগইন বোনাস ১৫০ কয়েন
             "ref_count": 0,
             "ref_credit": 0,
             "projects": [],
@@ -248,7 +248,6 @@ async def render_count_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"───────────────────\n\n"
         f"👉 বর্তমান রিয়্যাকশন সংখ্যা: {draft.get('count', 10)}"
     )
-    # ১০ থেকে ৫০০০ পর্যন্ত আপডেট করা রিয়্যাকশন অপশন
     keyboard = [
         [InlineKeyboardButton("10", callback_data="cnt_10"), InlineKeyboardButton("20", callback_data="cnt_20"), InlineKeyboardButton("30", callback_data="cnt_30")],
         [InlineKeyboardButton("50", callback_data="cnt_50"), InlineKeyboardButton("100", callback_data="cnt_100"), InlineKeyboardButton("200", callback_data="cnt_200")],
@@ -350,12 +349,19 @@ def send_smm_reaction_order(post_link, count):
             'quantity': count
         }
         response = requests.post(SMM_API_URL, data=payload, timeout=10)
-        return response.json()
+        res_json = response.json()
+        
+        # প্যানেলে অর্ডার জেনারেট বা কোনো এরর আছে কি না চেক
+        if "order" in res_json:
+            return True, res_json["order"]
+        else:
+            logging.error(f"SMM API Error Response: {res_json}")
+            return False, res_json.get("error", "Unknown API error")
     except Exception as e:
-        logging.error(f"SMM API Error: {e}")
-        return None
+        logging.error(f"SMM API Request Failed: {e}")
+        return False, str(e)
 
-# 📢 অটো পোস্ট ট্রিগার
+# 📢 অটো পোস্ট ট্রিগার (আপডেট করা লজিক)
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         message = update.channel_post
@@ -367,18 +373,49 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
 
         if not post_link: return
 
+        clean_admin = ADMIN_USERNAME.replace("@", "")
+        admin_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("💬 অ্যাডমিনের সাথে যোগাযোগ করুন", url=f"https://t.me/{clean_admin}")]])
+
         for uid, uinfo in db["users"].items():
             for proj in uinfo.get("projects", []):
                 if str(proj.get("channel_id")) == channel_id:
-                    if uinfo.get("credit", 0) <= 0: return
+                    
+                    # 🔴 শর্ত ১: ইউজারের কয়েন শেষ হয়ে গেলে
+                    if uinfo.get("credit", 0) <= 0:
+                        try:
+                            await context.bot.send_message(
+                                chat_id=int(uid),
+                                text=f"⚠️ **আপনার ব্যালেন্স শেষ!**\n\n"
+                                     f"আপনার `{proj.get('channel_name', 'চ্যানেলে')}` নতুন পোস্ট করা হলেও কয়েন না থাকায় রিয়্যাকশন পাঠানো যায়নি।\n"
+                                     f"নতুন পোস্টে অটো রিয়্যাকশন পেতে অ্যাডমিনের সাথে কথা বলে রিচার্জ করুন।",
+                                reply_markup=admin_keyboard
+                            )
+                        except Exception:
+                            pass
+                        return
 
                     target_count = proj.get("count", 10)
 
-                    # Background API Request
-                    asyncio.create_task(asyncio.to_thread(send_smm_reaction_order, post_link, target_count))
+                    # 🌐 SMM API-তে অর্ডার পাঠানো
+                    success, result = await asyncio.to_thread(send_smm_reaction_order, post_link, target_count)
 
-                    uinfo["credit"] -= 10
-                    save_data(db)
+                    if success:
+                        # সফল হলে কয়েন কাটা যাবে
+                        uinfo["credit"] -= 10
+                        if uinfo["credit"] < 0: uinfo["credit"] = 0
+                        save_data(db)
+                    else:
+                        # 🔴 শর্ত ২: SMM Panel-এ ব্যালেন্স না থাকলে বা এপিআই কাজ না করলে
+                        try:
+                            await context.bot.send_message(
+                                chat_id=int(uid),
+                                text=f"⚠️ **অ্যাডমিনের সাথে যোগাযোগ করুন!**\n\n"
+                                     f"প্যানেলে টেকনিক্যাল সমস্যা বা পর্যাপ্ত ব্যালেন্স না থাকার কারণে আপনার নতুন পোস্টে রিয়্যাকশন দেওয়া সম্ভব হয়নি।\n"
+                                     f"দ্রুত অ্যাডমিনকে বিষয়টি জানান। (আপনার বটের কয়েন কাটা হয়নি)",
+                                reply_markup=admin_keyboard
+                            )
+                        except Exception:
+                            pass
                     return
     except Exception as e:
         logging.error(f"Channel Trigger Error: {e}")
