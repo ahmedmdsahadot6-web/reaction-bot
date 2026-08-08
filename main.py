@@ -182,21 +182,16 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
-    # ফরওয়ার্ড মেসেজ চেক (নিরাপদ উপায়ে)
-    is_forwarded = False
-    if getattr(msg, 'forward_date', None) or getattr(msg, 'forward_from', None) or getattr(msg, 'forward_from_chat', None) or getattr(msg, 'forward_origin', None):
-        is_forwarded = True
+    is_forwarded = bool(getattr(msg, 'forward_date', None) or getattr(msg, 'forward_from', None) or getattr(msg, 'forward_from_chat', None) or getattr(msg, 'forward_origin', None))
 
     if is_forwarded:
         await msg.reply_text("❌ ফরওয়ার্ড করা মেসেজ গ্রহণ করা হয় না!\nঅনুগ্রহ করে চ্যানেল লিঙ্কটি (https://t.me/...) সরাসরি টাইপ/পেস্ট করে পাঠান।")
         return STEP_CHANNEL
 
-    # https://t.me/ চেক করা
     if "https://t.me/" not in txt:
         await msg.reply_text("❌ ভুল লিঙ্ক! লিঙ্কের শুরুতে অবশ্যই 'https://t.me/' থাকতে হবে। আবার সঠিকভাবে লিঙ্কটি লিখে পাঠান:")
         return STEP_CHANNEL
 
-    # লিঙ্ক বের করা
     match = re.search(r'https://t\.me/[^\s]+', txt)
     if not match:
         await msg.reply_text("❌ সঠিক লিঙ্ক পাওয়া যায়নি! আবার লিঙ্ক পাঠান:")
@@ -210,8 +205,6 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['draft_project']['target_url'] = extracted_url
 
     await msg.reply_text(f"✅ লিঙ্কটি নোট করা হয়েছে:\n🔗 {extracted_url}")
-
-    # সরাসরি ইমোজি অপশনে নিয়ে যাওয়া
     return await render_emoji_menu(update, context)
 
 # --- Step 1: Emoji Choice ---
@@ -389,7 +382,7 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"│ ⚡ গতি: {draft.get('speed')}\n"
         f"│ ⚙️ বিতরণ: {draft.get('dist')}\n"
         f"└────────────────────\n\n"
-        f"⚠️ '✅ প্রকল্প তৈরি করুন' বাটনে চাপ দিলে চ্যানেলটি যাচাই করে ডাটাবেজে সেভ করা হবে।"
+        f"⚠️ '✅ প্রকল্প তৈরি করুন' বাটনে চাপ দিলে চ্যানেলটি যাচাই করে সেভ করা হবে।"
     )
     keyboard = [
         [InlineKeyboardButton("✅ প্রকল্প তৈরি করুন", callback_data="create_final")],
@@ -414,22 +407,19 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not clean_handle.startswith("@") and not clean_handle.lstrip('-').isdigit():
         clean_handle = "@" + clean_handle
 
-    # ১) টেলিগ্রামে চ্যানেল খোঁজা ও বট এডমিন আছে কিনা চেক
     try:
         chat_info = await context.bot.get_chat(clean_handle)
         channel_id = str(chat_info.id)
         channel_title = chat_info.title or clean_handle
-    except Exception:
+    except Exception as e:
         await query.message.reply_text(
             f"❌ **প্রকল্প তৈরি ব্যর্থ হয়েছে!**\n\n"
-            f"বট চ্যানেলটিকে খুঁজে পায়নি বা আপনি বটকে চ্যানেলে Admin করেননি।\n\n"
-            f"⚠️ অনুগ্রহ করে নতুন করে আবার সঠিক তথ্য দিয়ে চেষ্টা করুন।",
+            f"বট চ্যানেলটিকে খুঁজে পায়নি বা আপনি বটকে চ্যানেলে Admin করেননি। (এরর: {e})",
             reply_markup=get_user_keyboard()
         )
         context.user_data.pop('draft_project', None)
         return ConversationHandler.END
 
-    # ২) ডুপ্লিকেট চ্যানেল চেক (ইতিমধ্যে অ্যাড করা আছে কিনা)
     for u_id, u_info in db.get("users", {}).items():
         for proj in u_info.get("projects", []):
             if str(proj.get("channel_id")) == channel_id or proj.get("target_url") == target_url:
@@ -441,7 +431,6 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 context.user_data.pop('draft_project', None)
                 return ConversationHandler.END
 
-    # ৩) ডাটাবেজে ফাইনাল সেভ
     u_data = get_user_data(user_id)
     draft['channel_id'] = channel_id
     draft['channel_name'] = channel_title
@@ -522,7 +511,7 @@ async def process_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_
     await update.message.reply_text(f"🎉 মোট {count} জন ইউজারের কাছে মেসেজ চলে গেছে!", reply_markup=get_admin_keyboard())
     return ConversationHandler.END
 
-# ⚡ Auto Reaction Trigger on Channel Post
+# ⚡ Auto Reaction Trigger on Channel Post (মেসেজ আসার সাথে সাথে সেভ করা রিয়্যাকশন এড হবে)
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         message = update.channel_post
@@ -549,6 +538,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                     target_emojis = proj.get("emojis", ["👍"])
                     chosen_emoji = random.choice(target_emojis) if target_emojis else "👍"
                     
+                    # টেলিগ্রাম পোস্টে রিয়্যাকশন সেন্ড
                     await context.bot.set_message_reaction(
                         chat_id=message.chat_id,
                         message_id=message.message_id,
@@ -557,6 +547,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
 
                     uinfo["credit"] -= 1
                     save_data(db)
+                    logging.info(f"Successfully reacted with {chosen_emoji} on {channel_id}")
                     return
     except Exception as e:
         logging.error(f"Auto Reaction Error: {e}")
@@ -675,6 +666,8 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
+    
+    # 📢 চ্যানেলে নতুন পোস্ট হলে অটোমেটিক রিয়্যাকশন দেওয়ার হ্যান্ডলার
     app.add_handler(MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post))
 
     print("🤖 Bot Active...")
