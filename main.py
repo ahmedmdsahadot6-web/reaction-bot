@@ -30,7 +30,7 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# 🔑 বোট ও SMM কনফিগারেশন (আপনার দেওয়া নতুন তথ্যসমূহ)
+# 🔑 বোট ও SMM কনফিগারেশন
 BOT_TOKEN = "8320025447:AAFWnP_asWXs6WXS-h_gPAy6Baikd6-4jMc"
 BOT_USERNAME = "TGSUPER_SERVICE_BOT"
 ADMIN_IDS = [8454401183, 8457454660]
@@ -56,7 +56,7 @@ def load_data():
 
 def save_data(data):
     try:
-        with open(DB_FILE, "w", encoding="utf-meta") as f:
+        with open(DB_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e:
         logging.error(f"Save error: {e}")
@@ -73,7 +73,7 @@ def get_user_data(user_id):
     str_id = str(user_id)
     if str_id not in db["users"]:
         db["users"][str_id] = {
-            "credit": 150,  # সাইনআপ/লগইন বোনাস ১৫০ কয়েন
+            "credit": 150,
             "ref_count": 0,
             "ref_credit": 0,
             "projects": [],
@@ -122,7 +122,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         referrer_id = context.args[0]
         if referrer_id != str_id and referrer_id in db["users"] and str_id not in db["users"]:
             db["users"][referrer_id]["ref_count"] += 1
-            db["users"][referrer_id]["credit"] += 100  # রেফার বোনাস ১০০ কয়েন
+            db["users"][referrer_id]["credit"] += 100
             db["users"][referrer_id]["ref_credit"] += 100
             save_data(db)
 
@@ -360,33 +360,41 @@ def send_smm_reaction_order(post_link, count):
         logging.error(f"SMM API Request Failed: {e}")
         return False, str(e)
 
-# 📢 অটো পোস্ট ট্রিগার (রিয়্যাকশন সফল হলে নোটিফিকেশন পাঠানোর ফিচারসহ)
+# 📢 অটো পোস্ট ট্রিগার (সম্পূর্ণ ফিক্সড পোস্ট হ্যান্ডলার)
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        message = update.channel_post
-        if not message: return
+        # চ্যানেল পোস্ট ক্যাচ করা
+        message = update.channel_post or update.effective_message
+        if not message or not message.chat:
+            return
 
-        channel_id = str(message.chat_id)
+        channel_id = str(message.chat.id)
         chat = message.chat
-        post_link = f"https://t.me/{chat.username}/{message.message_id}" if chat.username else None
-
-        if not post_link: return
+        
+        # পোস্ট লিংক তৈরি
+        if chat.username:
+            post_link = f"https://t.me/{chat.username}/{message.message_id}"
+        else:
+            # প্রাইভেট চ্যানেলের ক্ষেত্রে লিংক গঠন
+            clean_cid = str(chat.id).replace("-100", "")
+            post_link = f"https://t.me/c/{clean_cid}/{message.message_id}"
 
         clean_admin = ADMIN_USERNAME.replace("@", "")
         admin_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("💬 অ্যাডমিনের সাথে যোগাযোগ করুন", url=f"https://t.me/{clean_admin}")]])
 
+        # ডাটাবেজ ফিল্টারিং ও অর্ডার পাঠানো
         for uid, uinfo in db["users"].items():
             for proj in uinfo.get("projects", []):
                 if str(proj.get("channel_id")) == channel_id:
                     
-                    # 🔴 শর্ত ১: ইউজারের কয়েন শেষ হয়ে গেলে
+                    # শর্ত ১: কয়েন চেক
                     if uinfo.get("credit", 0) <= 0:
                         try:
                             await context.bot.send_message(
                                 chat_id=int(uid),
                                 text=f"⚠️ **আপনার ব্যালেন্স শেষ!**\n\n"
                                      f"আপনার `{proj.get('channel_name', 'চ্যানেলে')}` নতুন পোস্ট করা হলেও কয়েন না থাকায় রিয়্যাকশন পাঠানো যায়নি।\n"
-                                     f"নতুন পোস্টে অটো রিয়্যাকশন পেতে অ্যাডমিনের সাথে কথা বলে রিচার্জ করুন।",
+                                     f"নতুন পোস্টে অটো রিয়্যাকশন পেতে রিচার্জ করুন।",
                                 reply_markup=admin_keyboard
                             )
                         except Exception:
@@ -395,16 +403,15 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
 
                     target_count = proj.get("count", 10)
 
-                    # 🌐 SMM API-তে অর্ডার পাঠানো
+                    # API রিকোয়েস্ট পাঠানো
                     success, result = await asyncio.to_thread(send_smm_reaction_order, post_link, target_count)
 
                     if success:
-                        # সফল হলে কয়েন কাটা হবে
                         uinfo["credit"] -= 10
                         if uinfo["credit"] < 0: uinfo["credit"] = 0
                         save_data(db)
 
-                        # 🎉 ইউজারকে রিয়্যাকশন সফল হওয়ার নোটিফিকেশন পাঠানো
+                        # 🎉 নোটিফিকেশন মেসেজ
                         try:
                             await context.bot.send_message(
                                 chat_id=int(uid),
@@ -417,13 +424,12 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                         except Exception:
                             pass
                     else:
-                        # 🔴 শর্ত ২: SMM Panel-এ ব্যালেন্স না থাকলে বা কোনো সমস্যা হলে
                         try:
                             await context.bot.send_message(
                                 chat_id=int(uid),
                                 text=f"⚠️ **অ্যাডমিনের সাথে যোগাযোগ করুন!**\n\n"
-                                     f"প্যানেলে টেকনিক্যাল সমস্যা বা পর্যাপ্ত ব্যালেন্স না থাকার কারণে আপনার নতুন পোস্টে রিয়্যাকশন দেওয়া সম্ভব হয়নি।\n"
-                                     f"দ্রুত অ্যাডমিনকে বিষয়টি জানান। (আপনার বটের কয়েন কাটা হয়নি)",
+                                     f"প্যানেলে সমস্যা থাকার কারণে পোস্টটিতে রিয়্যাকশন দেওয়া সম্ভব হয়নি।\n"
+                                     f"Error: `{result}`",
                                 reply_markup=admin_keyboard
                             )
                         except Exception:
@@ -530,7 +536,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if u_data.get("last_daily_bonus") == today:
             await update.message.reply_text("⚠️ **আপনি আজকের দৈনিক বোনাস ইতোমধ্যেই ক্লেইম করেছেন!**\nআগামীকাল আবার চেষ্টা করুন।")
         else:
-            u_data["credit"] += 25  # দৈনিক বোনাস ২৫ কয়েন
+            u_data["credit"] += 25
             u_data["last_daily_bonus"] = today
             save_data(db)
             await update.message.reply_text(f"🎉 **দৈনিক বোনাস সফল!**\n\nআপনি ২৫ কয়েন ফ্রি পেয়েছেন।")
@@ -593,7 +599,9 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
-    app.add_handler(MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post))
+    
+    # চ্যানেল পোস্ট ডিটেক্টর হ্যান্ডলার (অল টাইপ মেসেজ ফিল্টার অন)
+    app.add_handler(MessageHandler(filters.ALL, auto_react_channel_post))
 
     print("🤖 SMM Reaction Bot Operational...")
     app.run_polling(drop_pending_updates=True)
