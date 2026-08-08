@@ -144,7 +144,7 @@ async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
     await update.message.reply_text(text, reply_markup=get_admin_keyboard())
 
-# --- Step 0: Channel Setup ---
+# --- Step 0: Channel Link Setup ---
 async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = get_user_data(user_id)
@@ -156,9 +156,7 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     context.user_data['draft_project'] = {
-        "channel_name": None,
-        "channel_id": None,
-        "raw_input": None,
+        "target_url": None,
         "emojis": ["❤️", "👍", "🔥", "💯"],
         "count": 20,
         "dist": "এলোমেলো",
@@ -170,8 +168,7 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🛰 ধাপ 0 • চ্যানেল সেটআপ\n"
         f"───────────────────\n\n"
         f"১) @{BOT_USERNAME} কে আপনার চ্যানেলে Admin হিসেবে যোগ করুন।\n\n"
-        f"২) এরপর চ্যানেলের যেকোনো ১টি পোস্ট ফরওয়ার্ড করে এখানে পাঠান\n"
-        f"অথবা চ্যানেলের ইউজারনেম/লিংক লিখে পাঠান (যেমন: @Sahadot_Reaction_Vip বা https://t.me/...):"
+        f"২) এরপর চ্যানেলের লিঙ্ক পাঠান (লিঙ্কের শুরুতে অবশ্যই https://t.me/ থাকতে হবে):"
     )
     await update.message.reply_text(text, reply_markup=cancel_keyboard())
     return STEP_CHANNEL
@@ -185,33 +182,33 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("প্রক্রিয়া বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
-    channel_title = "Telegram Channel"
-    channel_id = txt
+    # ফরওয়ার্ড করা মেসেজ এড়িয়ে যাওয়া
+    if msg.forward_from_chat or (hasattr(msg, 'forward_origin') and msg.forward_origin):
+        await msg.reply_text("❌ ফরওয়ার্ড করা মেসেজ গ্রহণ করা হয় না! অনুগ্রহ করে শুধু 'https://t.me/' লিংকটি পাঠান।")
+        return STEP_CHANNEL
 
-    if msg.forward_from_chat:
-        channel_title = msg.forward_from_chat.title or "Telegram Channel"
-        channel_id = str(msg.forward_from_chat.id)
-    elif hasattr(msg, 'forward_origin') and msg.forward_origin and hasattr(msg.forward_origin, 'chat'):
-        channel_title = msg.forward_origin.chat.title or "Telegram Channel"
-        channel_id = str(msg.forward_origin.chat.id)
-    elif txt:
-        if "t.me/" in txt:
-            channel_title = txt.split("/")[-1]
-        else:
-            channel_title = txt
+    # লিঙ্ক ফিল্টারিং - https://t.me/ চেক করা
+    if "https://t.me/" not in txt:
+        await msg.reply_text("❌ ভুল লিঙ্ক! লিঙ্কের শুরুতে অবশ্যই 'https://t.me/' থাকতে হবে। আবার সঠিকভাবে লিঙ্ক দিন:")
+        return STEP_CHANNEL
 
-    # ড্রাফটে ডাটা রাখা
+    # লিঙ্ক এক্সট্রাক্ট করা
+    match = re.search(r'https://t\.me/[^\s]+', txt)
+    if not match:
+        await msg.reply_text("❌ সঠিক লিঙ্ক পাওয়া যায়নি! আবার টাইপ করুন:")
+        return STEP_CHANNEL
+
+    extracted_url = match.group(0)
+
+    # নোট করে রাখা (ডাটাবেজে কিন্তু সেভ হচ্ছে না)
     if 'draft_project' not in context.user_data:
         context.user_data['draft_project'] = {}
 
-    context.user_data['draft_project']['channel_name'] = channel_title
-    context.user_data['draft_project']['channel_id'] = channel_id
-    context.user_data['draft_project']['raw_input'] = txt
+    context.user_data['draft_project']['target_url'] = extracted_url
 
-    # কাস্টম মেসেজ পাঠানো
-    await msg.reply_text(f"✅ চ্যানেল লিংক গৃহীত হয়েছে!\n📺 চ্যানেল: {channel_title}")
+    await msg.reply_text(f"✅ লিঙ্কটি সাময়িকভাবে নোট করা হয়েছে:\n🔗 {extracted_url}")
 
-    # সরাসরি ধাপ ১ (ইমোজি নির্বাচন) মেনু প্রদর্শন
+    # সরাসরি পরবর্তী অপশনে চলে যাওয়া
     return await render_emoji_menu(update, context)
 
 # --- Step 1: Emoji Choice ---
@@ -224,7 +221,7 @@ async def render_emoji_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"📝 ধাপ 1 • ইমোজি নির্বাচন করুন\n"
         f"───────────────────\n\n"
-        f"📺 চ্যানেল: {draft.get('channel_name', 'অজ্ঞাত')}\n"
+        f"🔗 লিঙ্ক: {draft.get('target_url', 'অজ্ঞাত')}\n"
         f"👉 বর্তমান নির্বাচিত ইমোজি: {selected}\n\n"
         f"ইমোজি বেছে নিয়ে '✅ সম্পন্ন' চাপুন:"
     )
@@ -381,7 +378,7 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
     text = (
         f"✨ FINAL REVIEW (চূড়ান্ত পর্যালোচনা) ✨\n"
         f"───────────────────\n\n"
-        f"📺 চ্যানেল: {draft.get('channel_name')}\n\n"
+        f"🔗 লিঙ্ক: {draft.get('target_url')}\n\n"
         f"┌────────────────────\n"
         f"│ 😊 ইমোজি: {emojis}\n"
         f"│ 🚀 প্রতিক্রিয়া: {draft.get('count')}\n"
@@ -389,7 +386,7 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"│ ⚡ গতি: {draft.get('speed')}\n"
         f"│ ⚙️ বিতরণ: {draft.get('dist')}\n"
         f"└────────────────────\n\n"
-        f"⚠️ '✅ প্রকল্প তৈরি করুন' বাটনে চাপ দিলেই ডাটাবেজে সেভ হবে ও চ্যানেলের সাথে কানেক্ট হবে।"
+        f"⚠️ '✅ প্রকল্প তৈরি করুন' বাটনে চাপ দিলে চ্যানেলটি যাচাই করে ডাটাবেজে সেভ করা হবে।"
     )
     keyboard = [
         [InlineKeyboardButton("✅ প্রকল্প তৈরি করুন", callback_data="create_final")],
@@ -403,40 +400,64 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
-    u_data = get_user_data(user_id)
     
     draft = context.user_data.get('draft_project')
-    if not draft:
-        await query.message.reply_text("❌ কোনো তথ্য পাওয়া যায়নি! নতুন করে চেষ্টা করুন।", reply_markup=get_user_keyboard())
+    if not draft or not draft.get('target_url'):
+        await query.message.reply_text("❌ কোনো তথ্য পাওয়া যায়নি! শুরু থেকে আবার চেষ্টা করুন।", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
-    raw_inp = draft.get('raw_input') or draft.get('channel_id')
-    final_channel_id = draft.get('channel_id')
-    final_channel_name = draft.get('channel_name')
+    target_url = draft.get('target_url')
+    
+    # লিঙ্ক থেকে চ্যানেল হ্যান্ডেল বের করা
+    clean_handle = target_url.split("/")[-1]
+    if not clean_handle.startswith("@") and not clean_handle.isdigit():
+        clean_handle = "@" + clean_handle
 
+    # ১) চ্যানেল খুঁজে পাওয়ার ট্রাই করা
     try:
-        chat_info = await context.bot.get_chat(raw_inp)
-        final_channel_id = str(chat_info.id)
-        final_channel_name = chat_info.title or final_channel_name
-    except Exception:
-        pass
+        chat_info = await context.bot.get_chat(clean_handle)
+        channel_id = str(chat_info.id)
+        channel_title = chat_info.title or clean_handle
+    except Exception as e:
+        # ভুল লিঙ্ক দিলে বা বটকে এড না করলে এখান থেকেই ক্যানসেল হবে
+        await query.message.reply_text(
+            f"❌ **প্রকল্প তৈরি ব্যর্থ হয়েছে!**\n\n"
+            f"বট চ্যানেলটিকে খুঁজে পায়নি বা বটটি সেখানে এডমিন হিসেবে যুক্ত নেই।\n"
+            f"⚠️ অনুগ্রহ করে নতুন করে সঠিক লিঙ্ক দিয়ে আবার চেষ্টা করুন।",
+            reply_markup=get_user_keyboard()
+        )
+        context.user_data.pop('draft_project', None)
+        return ConversationHandler.END
 
-    draft['channel_id'] = final_channel_id
-    draft['channel_name'] = final_channel_name
+    # ২) চেক করা - চ্যানেলটি ডাটাবেজে আগে থেকেই অন্য কারও বা একই একাউন্টে আছে কিনা
+    for u_id, u_info in db.get("users", {}).items():
+        for proj in u_info.get("projects", []):
+            if str(proj.get("channel_id")) == channel_id or proj.get("target_url") == target_url:
+                await query.message.reply_text(
+                    f"⚠️ **এই একাউন্ট/চ্যানেলটি ইতিমধ্যে যুক্ত করা হয়েছে!**\n"
+                    f"একটি চ্যানেল একাধিকবার যুক্ত করা যাবে না।",
+                    reply_markup=get_user_keyboard()
+                )
+                context.user_data.pop('draft_project', None)
+                return ConversationHandler.END
 
-    u_data['projects'] = [p for p in u_data.get('projects', []) if str(p.get('channel_id')) != str(final_channel_id)]
+    # ৩) ডাটাবেজে ফাইনাল সেভ করা
+    u_data = get_user_data(user_id)
+    draft['channel_id'] = channel_id
+    draft['channel_name'] = channel_title
+    
     u_data['projects'].append(draft)
     save_data(db)
 
     context.user_data.pop('draft_project', None)
 
     await query.message.reply_text(
-        f"🎉 প্রকল্প সফলভাবে তৈরি ও ডাটাবেজে সেভ হয়েছে!\n\n"
-        f"📁 চ্যানেল: {final_channel_name}\n"
-        f"🆔 আইডি: {final_channel_id}\n"
+        f"🎉 **প্রকল্প সফলভাবে তৈরি ও কানেক্ট হয়েছে!**\n\n"
+        f"📁 চ্যানেল: {channel_title}\n"
+        f"🆔 আইডি: {channel_id}\n"
         f"😊 ইমোজি: {' '.join(draft['emojis'])}\n"
         f"🚀 প্রতিক্রিয়া: {draft['count']}\n\n"
-        f"এখন চ্যানেলে নতুন পোস্ট করার সাথে সাথে অটো রিয়্যাকশন চলে যাবে।",
+        f"এখন চ্যানেলে নতুন পোস্ট করার সাথে সাথে অটো রিয়্যাকশন কানেক্ট হয়ে যাবে।",
         reply_markup=get_user_keyboard()
     )
     return ConversationHandler.END
@@ -518,7 +539,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                             inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 রিচার্জ করুন", url=f"https://t.me/{clean_admin}")]])
                             await context.bot.send_message(
                                 chat_id=int(uid),
-                                text=f"⚠️ ক্রেডিট শেষ!\nআপনার {proj['channel_name']} চ্যানেলে রিয়্যাকশন পাঠানোর পর্যাপ্ত ক্রেডিট নেই।",
+                                text=f"⚠️ ক্রেডিট শেষ!\nআপনার {proj.get('channel_name', 'চ্যানেল')} চ্যানেলে রিয়্যাকশন পাঠানোর পর্যাপ্ত ক্রেডিট নেই।",
                                 reply_markup=inline_kb
                             )
                         except Exception:
@@ -611,7 +632,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if projects:
             p_text = "📁 আপনার সেভ করা প্রকল্পসমূহ:\n───────────────────\n"
             for idx, p in enumerate(projects, 1):
-                p_text += f"{idx}. {p['channel_name']}\nইমোজি: {' '.join(p['emojis'])}\nরিঅ্যাকশন: {p['count']}\n\n"
+                p_text += f"{idx}. {p.get('channel_name', 'চ্যানেল')}\nইমোজি: {' '.join(p['emojis'])}\nরিঅ্যাকশন: {p['count']}\n\n"
             await update.message.reply_text(p_text)
         else:
             await update.message.reply_text("❌ আপনার কোনো সেভ করা প্রকল্প নেই।")
@@ -633,8 +654,7 @@ if __name__ == '__main__':
             MessageHandler(filters.Regex("^📢 অল ইউজার ব্রডকাস্ট$"), start_broadcast),
         ],
         states={
-            # filters.ALL ব্যবহার করা হয়েছে যাতে টেক্সট, লিংক, ফরওয়ার্ড পোস্ট - যা-ই আসুক সাথে সাথে STEP_EMOJI তে চলে যায়
-            STEP_CHANNEL: [MessageHandler(filters.ALL & ~filters.COMMAND, save_channel)],
+            STEP_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_channel)],
             STEP_EMOJI: [CallbackQueryHandler(emoji_callback, pattern="^(em_|em_done)")],
             STEP_COUNT: [CallbackQueryHandler(count_callback, pattern="^(cnt_|back_emoji|locked)")],
             STEP_DISTRIBUTION: [CallbackQueryHandler(distribution_callback, pattern="^(dist_|back_count)")],
