@@ -69,9 +69,6 @@ db = load_json(DB_FILE, {"users": {}, "blocked": []})
 if "users" not in db: db["users"] = {}
 if "blocked" not in db: db["blocked"] = []
 
-# সেশন লোড করা
-user_sessions = load_json(SESSIONS_FILE, [])
-
 (STEP_CHANNEL, STEP_EMOJI, STEP_COUNT) = range(3)
 
 logging.basicConfig(level=logging.INFO)
@@ -248,9 +245,120 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
     return ConversationHandler.END
 
+# 📁 ইউজার বাটন হ্যান্ডলার
+async def my_projects(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    u_data = get_user_data(user_id)
+    projects = u_data.get("projects", [])
+    
+    if not projects:
+        await update.message.reply_text("📂 আপনার কোনো প্রজেক্ট চালু নেই।", reply_markup=get_user_keyboard())
+        return
+        
+    msg = "📁 **আপনার প্রজেক্ট সমূহ:**\n\n"
+    for i, p in enumerate(projects, 1):
+        msg += f"{i}. {p.get('channel_name')}\n   🔗 {p.get('target_url')}\n   😊 {' '.join(p.get('emojis', []))}\n\n"
+    await update.message.reply_text(msg, reply_markup=get_user_keyboard())
+
+async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    u_data = get_user_data(user_id)
+    await update.message.reply_text(
+        f"👤 **ইউজার প্রোফাইল:**\n\n"
+        f"🆔 ID: `{user_id}`\n"
+        f"💰 অবশিষ্ট ক্রেডিট: {u_data.get('credit', 0)}",
+        reply_markup=get_user_keyboard(),
+        parse_mode="Markdown"
+    )
+
+async def recharge_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    clean_admin = ADMIN_USERNAME.replace("@", "")
+    inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 এডমিন সাপোর্ট", url=f"https://t.me/{clean_admin}")]])
+    await update.message.reply_text("💳 ক্রেডিট রিচার্জ করতে এডমিনের সাথে যোগাযোগ করুন:", reply_markup=inline_kb)
+
+# 👑 ================= ADMiN PANEL (নতুন যুক্ত করা হয়েছে) ================= 👑
+
+def is_admin(user_id):
+    return user_id in ADMIN_IDS
+
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    
+    sessions = load_json(SESSIONS_FILE, [])
+    total_users = len(db["users"])
+    
+    msg = (
+        "👑 **এডমিন প্যানেল (Admin Commands)**\n\n"
+        f"👥 মোট ইউজার: {total_users}\n"
+        f"📱 একটিভ সেশন সংখ্যা: {len(sessions)}\n\n"
+        "**উপলব্ধ কমান্ডসমূহ:**\n"
+        "• `/admin` - প্যানেল দেখুন\n"
+        "• `/addcredit <user_id> <amount>` - ক্রেডিট যোগ করুন\n"
+        "• `/setcredit <user_id> <amount>` - ক্রেডিট সেট করুন\n"
+        "• `/block <user_id>` - ইউজার ব্লক করুন\n"
+        "• `/unblock <user_id>` - ইউজার আনব্লক করুন\n"
+        "• `/broadcast <মেসেজ>` - সবাইকে মেসেজ পাঠান\n"
+        "• `/stats` - ডাটাবেজ তথ্য দেখুন"
+    )
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+async def admin_add_credit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    try:
+        target_id = str(context.args[0])
+        amount = int(context.args[1])
+        
+        if target_id not in db["users"]:
+            get_user_data(target_id)
+            
+        db["users"][target_id]["credit"] += amount
+        save_json(DB_FILE, db)
+        
+        await update.message.reply_text(f"✅ User `{target_id}`-এর সাথে {amount} ক্রেডিট যোগ করা হয়েছে। বর্তমান ক্রেডিট: {db['users'][target_id]['credit']}", parse_mode="Markdown")
+    except Exception:
+        await update.message.reply_text("❌ ভুল ফরম্যাট! সঠিক নিয়ম: `/addcredit <user_id> <amount>`", parse_mode="Markdown")
+
+async def admin_block(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    try:
+        target_id = str(context.args[0])
+        if target_id not in db["blocked"]:
+            db["blocked"].append(target_id)
+            save_json(DB_FILE, db)
+        await update.message.reply_text(f"🚫 User `{target_id}` কে ব্লক করা হয়েছে।", parse_mode="Markdown")
+    except Exception:
+        await update.message.reply_text("❌ সঠিক নিয়ম: `/block <user_id>`", parse_mode="Markdown")
+
+async def admin_unblock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    try:
+        target_id = str(context.args[0])
+        if target_id in db["blocked"]:
+            db["blocked"].remove(target_id)
+            save_json(DB_FILE, db)
+        await update.message.reply_text(f"✅ User `{target_id}` কে আনব্লক করা হয়েছে।", parse_mode="Markdown")
+    except Exception:
+        await update.message.reply_text("❌ সঠিক নিয়ম: `/unblock <user_id>`", parse_mode="Markdown")
+
+async def admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    msg_text = " ".join(context.args)
+    if not msg_text:
+        await update.message.reply_text("❌ লিখুন: `/broadcast আপনার মেসেজ`", parse_mode="Markdown")
+        return
+        
+    count = 0
+    for uid in db["users"].keys():
+        try:
+            await context.bot.send_message(chat_id=int(uid), text=f"📢 **এডমিন ঘোষণা:**\n\n{msg_text}", parse_mode="Markdown")
+            count += 1
+            await asyncio.sleep(0.1)
+        except Exception:
+            pass
+    await update.message.reply_text(f"✅ মোট {count} জন ইউজারের কাছে মেসেজ পাঠানো হয়েছে।")
+
 # ⚡ Multi-Reaction Dispatcher (Telethon UserBot)
 async def trigger_multi_reactions(channel_id, message_id, emojis, target_count):
-    # নতুন করে sessions.json রিড করা
     sessions = load_json(SESSIONS_FILE, [])
     if not sessions:
         logging.warning("No Telethon user sessions found in sessions.json!")
@@ -317,6 +425,18 @@ if __name__ == '__main__':
 
     app.add_handler(conv_handler)
     app.add_handler(CommandHandler('start', start))
+    
+    # 👑 Admin Handlers
+    app.add_handler(CommandHandler('admin', admin_panel))
+    app.add_handler(CommandHandler('addcredit', admin_add_credit))
+    app.add_handler(CommandHandler('block', admin_block))
+    app.add_handler(CommandHandler('unblock', admin_unblock))
+    app.add_handler(CommandHandler('broadcast', admin_broadcast))
+
+    # User Handlers
+    app.add_handler(MessageHandler(filters.Regex("^📁 আমার প্রকল্প$"), my_projects))
+    app.add_handler(MessageHandler(filters.Regex("^🌟 পরিকল্পনা এবং ভারসাম্য$"), user_info))
+    app.add_handler(MessageHandler(filters.Regex("^💰 রিচার্জ করুন$"), recharge_info))
     app.add_handler(MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post))
 
     print("🤖 Bot Active with Telethon Cluster...")
