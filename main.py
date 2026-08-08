@@ -30,16 +30,16 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# 🔑 বোট ও SMM কনফিগারেশন
+# 🔑 বোট ও SMM কনফিগারেশন (আপনার দেওয়া নতুন তথ্যসমূহ)
 BOT_TOKEN = "8320025447:AAFWnP_asWXs6WXS-h_gPAy6Baikd6-4jMc"
-BOT_USERNAME = "@TGSUPER_SERVICE_BOT"
-ADMIN_IDS = [7973059882, 8454401183, 8457454660]
-ADMIN_USERNAME = "@MDsahadot1685"
+BOT_USERNAME = "TGSUPER_SERVICE_BOT"
+ADMIN_IDS = [8454401183, 8457454660]
+ADMIN_USERNAME = "@SOYABUR_AS_LEADER"
 
 # 🌐 SMM Panel API settings
-SMM_API_URL = "https://smmmain.com/api/v2"
-SMM_API_KEY = "ff6847aa27a770f823404779be2b0963"
-REACTION_SERVICE_ID = "380"
+SMM_API_URL = "https://1xpanel.com/api/v2"
+SMM_API_KEY = "0b2fbfd793c2cc3cec163c1faaaa318c"
+REACTION_SERVICE_ID = "1936"
 
 DB_FILE = "database.json"
 logging.basicConfig(level=logging.INFO)
@@ -56,7 +56,7 @@ def load_data():
 
 def save_data(data):
     try:
-        with open(DB_FILE, "w", encoding="utf-8") as f:
+        with open(DB_FILE, "w", encoding="utf-meta") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e:
         logging.error(f"Save error: {e}")
@@ -351,7 +351,6 @@ def send_smm_reaction_order(post_link, count):
         response = requests.post(SMM_API_URL, data=payload, timeout=10)
         res_json = response.json()
         
-        # প্যানেলে অর্ডার জেনারেট বা কোনো এরর আছে কি না চেক
         if "order" in res_json:
             return True, res_json["order"]
         else:
@@ -361,7 +360,7 @@ def send_smm_reaction_order(post_link, count):
         logging.error(f"SMM API Request Failed: {e}")
         return False, str(e)
 
-# 📢 অটো পোস্ট ট্রিগার (আপডেট করা লজিক)
+# 📢 অটো পোস্ট ট্রিগার (রিয়্যাকশন সফল হলে নোটিফিকেশন পাঠানোর ফিচারসহ)
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         message = update.channel_post
@@ -400,12 +399,25 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                     success, result = await asyncio.to_thread(send_smm_reaction_order, post_link, target_count)
 
                     if success:
-                        # সফল হলে কয়েন কাটা যাবে
+                        # সফল হলে কয়েন কাটা হবে
                         uinfo["credit"] -= 10
                         if uinfo["credit"] < 0: uinfo["credit"] = 0
                         save_data(db)
+
+                        # 🎉 ইউজারকে রিয়্যাকশন সফল হওয়ার নোটিফিকেশন পাঠানো
+                        try:
+                            await context.bot.send_message(
+                                chat_id=int(uid),
+                                text=f"🎉 **সফলভাবে রিয়্যাকশন পাঠানো হয়েছে!**\n\n"
+                                     f"📢 **চ্যানেল:** {proj.get('channel_name')}\n"
+                                     f"📌 **পোস্ট লিঙ্ক:** {post_link}\n"
+                                     f"🚀 **রিয়্যাকশন সংখ্যা:** {target_count} টি\n"
+                                     f"💰 **অবশিষ্ট ব্যালেন্স:** {uinfo['credit']} কয়েন"
+                            )
+                        except Exception:
+                            pass
                     else:
-                        # 🔴 শর্ত ২: SMM Panel-এ ব্যালেন্স না থাকলে বা এপিআই কাজ না করলে
+                        # 🔴 শর্ত ২: SMM Panel-এ ব্যালেন্স না থাকলে বা কোনো সমস্যা হলে
                         try:
                             await context.bot.send_message(
                                 chat_id=int(uid),
@@ -423,7 +435,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
 # 👑 অ্যাডমিন একশনস
 async def start_add_credit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
-    await update.message.reply_text("💳 কয়েন বাড়াতে/কমাতে লিখুন: `User_ID Amount`\nযেমন: `7973059882 500`", reply_markup=cancel_keyboard())
+    await update.message.reply_text("💳 কয়েন বাড়াতে/কমাতে লিখুন: `User_ID Amount`\nযেমন: `8454401183 500`", reply_markup=cancel_keyboard())
     return STEP_ADMIN_ADD_CREDIT
 
 async def process_admin_credit(update: Update, context: ContextTypes.DEFAULT_TYPE):
