@@ -31,9 +31,9 @@ def keep_alive():
     t.start()
 
 # 🔑 বোট ও SMM কনফিগারেশন
-BOT_TOKEN = "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw"
-BOT_USERNAME = "Sahadot_reaction123_bot"
-ADMIN_IDS = [7973059882, 8454401183]
+BOT_TOKEN = "8320025447:AAFWnP_asWXs6WXS-h_gPAy6Baikd6-4jMc"
+BOT_USERNAME = "@TGSUPER_SERVICE_BOT"
+ADMIN_IDS = [7973059882, 8454401183, 8457454660]
 ADMIN_USERNAME = "@MDsahadot1685"
 
 # 🌐 SMM Panel API settings
