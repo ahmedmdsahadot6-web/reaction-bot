@@ -89,7 +89,8 @@ if "blocked" not in db: db["blocked"] = []
 # States
 (STEP_CHANNEL, STEP_STATUS, STEP_EMOJI, STEP_CUSTOM_EMOJI, STEP_DISTRIBUTION, 
  STEP_SPEED, STEP_COUNT, STEP_VIEWS, STEP_REVIEW, 
- STEP_ADMIN_ADD_CREDIT, STEP_ADMIN_BLOCK_USER, STEP_ADMIN_BROADCAST) = range(12)
+ STEP_EDIT_FIELD, STEP_EDIT_VALUE,
+ STEP_ADMIN_ADD_CREDIT, STEP_ADMIN_BLOCK_USER, STEP_ADMIN_BROADCAST) = range(14)
 
 def get_user_data(user_id):
     str_id = str(user_id)
@@ -529,6 +530,116 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg_text, reply_markup=get_user_keyboard())
     return ConversationHandler.END
 
+# 🎛️ প্রজেক্ট ON/OFF টগল এবং এডিট হ্যান্ডলার (In-Menu Controls)
+async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = str(query.from_user.id)
+    data = query.data
+
+    u_data = get_user_data(user_id)
+    projects = u_data.get('projects', [])
+
+    if data.startswith("p_toggle_"):
+        idx = int(data.split("_")[2])
+        if 0 <= idx < len(projects):
+            projects[idx]['status'] = "OFF" if projects[idx].get('status', 'ON') == "ON" else "ON"
+            save_data(db)
+            await query.message.reply_text(f"✅ প্রজেক্ট স্ট্যাটাস পরিবর্তন করে **{projects[idx]['status']}** করা হয়েছে!")
+            return await show_my_projects(query.message, user_id)
+
+    elif data.startswith("p_edit_"):
+        idx = int(data.split("_")[2])
+        if 0 <= idx < len(projects):
+            proj = projects[idx]
+            kb = [
+                [InlineKeyboardButton("📊 রিয়্যাকশন সংখ্যা এডিট", callback_data=f"fe_{idx}_count")],
+                [InlineKeyboardButton("👁️ ভিউস সংখ্যা এডিট", callback_data=f"fe_{idx}_views")],
+                [InlineKeyboardButton("😊 ইমোজি এডিট", callback_data=f"fe_{idx}_emojis")],
+                [InlineKeyboardButton("🔙 ব্যাক", callback_data="p_back")]
+            ]
+            await query.edit_message_text(
+                f"✏️ **এডিট করুন:** {proj.get('channel_name')}\n\n"
+                f"কোন অপশনটি পরিবর্তন করতে চান সিলেক্ট করুন:",
+                reply_markup=InlineKeyboardMarkup(kb)
+            )
+
+    elif data.startswith("fe_"):
+        parts = data.split("_")
+        idx, field = int(parts[1]), parts[2]
+        context.user_data['edit_target'] = {'idx': idx, 'field': field}
+        
+        await query.message.reply_text(
+            f"✍️ **নতুন মান লিখে পাঠান:**\n"
+            f"(যেমন: রিয়্যাকশন/ভিউস হলে সংখ্যা যেমন: `200` বা ইমোজি হলে লিখুন `👍❤️🔥`)",
+            reply_markup=cancel_keyboard()
+        )
+        return STEP_EDIT_VALUE
+
+    elif data == "p_back":
+        await show_my_projects(query.message, user_id)
+
+async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    val_txt = update.message.text.strip()
+    if val_txt in ["❌ বাতিল করুন", "বাতিল করুন"]:
+        context.user_data.pop('edit_target', None)
+        await update.message.reply_text("এডিট বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
+        return ConversationHandler.END
+
+    target = context.user_data.get('edit_target')
+    if not target:
+        await update.message.reply_text("❌ সমস্যা হয়েছে!", reply_markup=get_user_keyboard())
+        return ConversationHandler.END
+
+    user_id = str(update.effective_user.id)
+    u_data = get_user_data(user_id)
+    projects = u_data.get('projects', [])
+
+    idx = target['idx']
+    field = target['field']
+
+    if 0 <= idx < len(projects):
+        if field in ['count', 'views']:
+            try:
+                projects[idx][field] = int(val_txt)
+            except ValueError:
+                await update.message.reply_text("❌ অনুগ্রহ করে শুধু সংখ্যা লিখুন!")
+                return STEP_EDIT_VALUE
+        else:
+            projects[idx][field] = val_txt
+
+        save_data(db)
+        context.user_data.pop('edit_target', None)
+        await update.message.reply_text("🎉 **সফলভাবে আপডেট করা হয়েছে!**", reply_markup=get_user_keyboard())
+    
+    return ConversationHandler.END
+
+# 📂 'আমার প্রকল্প' প্রদর্শন ফাংশন
+async def show_my_projects(message_obj, user_id):
+    u_data = get_user_data(user_id)
+    projects = u_data.get('projects', [])
+
+    if not projects:
+        await message_obj.reply_text("❌ আপনার কোনো প্রজেক্ট নেই।")
+        return
+
+    for idx, p in enumerate(projects):
+        st = p.get('status', 'ON')
+        btn_st_text = "🔴 OFF করুন" if st == "ON" else "🟢 ON করুন"
+        
+        kb = [
+            [InlineKeyboardButton(btn_st_text, callback_data=f"p_toggle_{idx}"), InlineKeyboardButton("✏️ এডিট", callback_data=f"p_edit_{idx}")]
+        ]
+        p_text = (
+            f"📁 **প্রজেক্ট #{idx+1}: {p.get('channel_name', 'চ্যানেল')}**\n"
+            f"───────────────────\n"
+            f"⚙️ স্ট্যাটাস: **{st}**\n"
+            f"🚀 রিয়্যাকশন: **{p.get('count', 100)}** টি\n"
+            f"👁️ ভিউস: **{p.get('views', 0)}** টি\n"
+            f"😊 ইমোজি: **{p.get('emojis', 'POSITIVE')}**"
+        )
+        await message_obj.reply_text(p_text, reply_markup=InlineKeyboardMarkup(kb))
+
 # 🚀 📌 মূল অটো-রিয়্যাকশন অর্ডার সাবমিট ইঞ্জিন
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.channel_post or update.edited_channel_post
@@ -751,19 +862,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🆘 যেকোনো সহায়তার জন্য যোগাযোগ করুন:", reply_markup=inline_kb)
 
     elif text == "📁 আমার প্রকল্প":
-        projects = u_data.get('projects', [])
-        if projects:
-            p_text = "📁 **আপনার সেভ করা প্রজেক্টসমূহ:**\n───────────────────\n"
-            for idx, p in enumerate(projects, 1):
-                p_text += (
-                    f"{idx}. {p.get('channel_name', 'চ্যানেল')}\n"
-                    f"স্ট্যাটাস: {p.get('status', 'ON')}\n"
-                    f"রিঅ্যাকশন: {p.get('count', 100)} টি\n"
-                    f"ভিউস: {p.get('views', 0)} টি\n\n"
-                )
-            await update.message.reply_text(p_text)
-        else:
-            await update.message.reply_text("❌ আপনার কোনো প্রজেক্ট নেই।")
+        await show_my_projects(update.message, str_id)
 
 if __name__ == '__main__':
     keep_alive()
@@ -783,6 +882,7 @@ if __name__ == '__main__':
             MessageHandler(filters.Regex("^💳 ক্রেডিট কন্ট্রোল$"), start_add_credit),
             MessageHandler(filters.Regex("^🚫 ইউজার ব্লক/রিমুভ$"), start_block_user),
             MessageHandler(filters.Regex("^📢 অল ইউজার ব্রডকাস্ট$"), start_broadcast),
+            CallbackQueryHandler(project_action_callback, pattern="^(fe_)")
         ],
         states={
             STEP_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_channel)],
@@ -797,6 +897,7 @@ if __name__ == '__main__':
                 CallbackQueryHandler(finalize_project, pattern="^create_final$"),
                 CallbackQueryHandler(cancel_flow, pattern="^cancel_flow$")
             ],
+            STEP_EDIT_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_value)],
             STEP_ADMIN_ADD_CREDIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_credit)],
             STEP_ADMIN_BLOCK_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_block)],
             STEP_ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_broadcast)]
@@ -809,6 +910,7 @@ if __name__ == '__main__':
     
     app.add_handler(channel_handler)
     app.add_handler(conv_handler)
+    app.add_handler(CallbackQueryHandler(project_action_callback, pattern="^(p_|fe_)"))
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
