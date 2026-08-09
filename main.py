@@ -386,7 +386,7 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg_text, reply_markup=get_user_keyboard())
     return ConversationHandler.END
 
-# 🌐 1xpanel API Engine
+# 🌐 1xpanel API Engine (উন্নত লিঙ্ক সাপোর্ট)
 def send_smm_reaction_order(post_link, count):
     payload = {
         'key': SMM_API_KEY,
@@ -404,9 +404,9 @@ def send_smm_reaction_order(post_link, count):
         
         try:
             res_json = response.json()
-            logger.info(f"[SMM-API] Raw Response: {res_json}")
+            logger.info(f"[SMM-API] Response: {res_json}")
         except Exception:
-            return False, None, f"Non-JSON response from SMM server"
+            return False, None, "Non-JSON response from SMM server"
         
         if "order" in res_json:
             return True, str(res_json["order"]), None
@@ -421,68 +421,72 @@ def send_smm_reaction_order(post_link, count):
     except Exception as e:
         return False, None, f"Server Error: {str(e)}"
 
-# 📢 অটো পোস্ট ক্যাচিং ফাংশন
+# 📢 অটো পোস্ট ক্যাচিং ও মাল্টি-লেভেল ট্র্যাকিং
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.channel_post or update.edited_channel_post
     if not msg or not msg.chat:
         return
 
-    channel_id = str(msg.chat.id)
+    raw_channel_id = str(msg.chat.id)
     chat_username = (msg.chat.username or "").lower()
     post_id = msg.message_id
-    chat = msg.chat
 
-    logger.info(f"📢 [POST DETECTED] Channel ID: {channel_id} | Username: @{chat_username} | Message ID: {post_id}")
+    logger.info(f"📢 [POST DETECTED] ID: {raw_channel_id} | Username: @{chat_username} | Message ID: {post_id}")
 
     clean_admin = ADMIN_USERNAME.replace("@", "")
-    admin_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("💬 অ্যাডমিনের সাপোর্ট নিন", url=f"https://t.me/{clean_admin}")]])
+    admin_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("💬 অ্যাডমিনকে জানান", url=f"https://t.me/{clean_admin}")]])
 
     matched_projects = []
 
-    # ইউজার ডাটাবেজ ম্যাচিং
+    # সকল প্রজেক্টের সাথে নিখুঁতভাবে মেলানো (ID + Username)
     for uid, uinfo in db["users"].items():
         for proj in uinfo.get("projects", []):
             proj_cid = str(proj.get("channel_id", ""))
             proj_uname = str(proj.get("username", "")).lower().replace("@", "")
 
-            if proj_cid == channel_id or (chat_username and proj_uname == chat_username):
+            # ১. সরাসরি Channel ID দিয়ে ম্যাচ
+            # ২. Username দিয়ে ম্যাচ
+            # ৩. -100 সরিয়ে ID ম্যাচ
+            if (proj_cid and proj_cid == raw_channel_id) or \
+               (chat_username and proj_uname == chat_username) or \
+               (proj_cid.replace("-100", "") == raw_channel_id.replace("-100", "")):
                 matched_projects.append((uid, uinfo, proj))
 
     if not matched_projects:
-        logger.info(f"⚠️ No active project found for channel {channel_id}")
+        logger.info(f"⚠️ No active project found for post in channel {raw_channel_id}")
         return
 
     for uid, uinfo, proj in matched_projects:
         user_chat_id = int(uid)
         ch_name = proj.get("channel_name", "চ্যানেল")
 
-        # পোস্ট লিঙ্ক জেনারেট
+        # ১ক্সপ্যানেলের জন্য পারফেক্ট পোস্ট লিঙ্ক তৈরি
         if chat_username:
             post_link = f"https://t.me/{chat_username}/{post_id}"
         elif proj.get("username"):
             post_link = f"https://t.me/{proj.get('username')}/{post_id}"
         else:
-            clean_cid = str(chat.id).replace("-100", "")
+            clean_cid = raw_channel_id.replace("-100", "")
             post_link = f"https://t.me/c/{clean_cid}/{post_id}"
 
-        # 🔔 পোস্ট হওয়ামাত্রই প্রথম ইনবক্স মেসেজ
+        # 🔔 পোস্ট শনাক্ত হওয়ার ১st নোটিফিকেশন
         try:
             await context.bot.send_message(
                 chat_id=user_chat_id,
-                text=f"📢 **চ্যানেলে নতুন পোস্ট করা হয়েছে!**\n\n"
+                text=f"📢 **চ্যানেলে নতুন পোস্ট শনাক্ত হয়েছে!**\n\n"
                      f"📁 **চ্যানেল:** {ch_name}\n"
                      f"📌 **পোস্ট লিঙ্ক:** {post_link}\n\n"
-                     f"⏳ অটো-রিয়্যাকশন প্রসেস করা হচ্ছে..."
+                     f"⏳ অটো-রিয়্যাকশন অর্ডার পাঠানো হচ্ছে..."
             )
         except Exception as e:
-            logger.error(f"Failed to send post notice to user {uid}: {e}")
+            logger.error(f"Failed to notify user {uid}: {e}")
 
         # ব্যালেন্স চেক
         if uinfo.get("credit", 0) <= 0:
             try:
                 await context.bot.send_message(
                     chat_id=user_chat_id,
-                    text=f"🚨 **সমস্যা হয়েছে! (রিঅ্যাকশন পাঠানো সম্ভব হয়নি)**\n\n"
+                    text=f"🚨 **রিঅ্যাকশন পাঠানো সম্ভব হয়নি!**\n\n"
                          f"📢 **চ্যানেল:** {ch_name}\n"
                          f"❌ **কারণ:** আপনার একাউন্টে পর্যাপ্ত কয়েন নেই!",
                     reply_markup=admin_keyboard
@@ -493,12 +497,12 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
 
         target_count = max(100, proj.get("count", 100))
 
-        # API দিয়ে রিয়্যাকশন পাঠানো
+        # SMM API দিয়ে রিয়্যাকশন অর্ডার প্লেস
         success, order_id, error_reason = await asyncio.to_thread(
             send_smm_reaction_order, post_link, target_count
         )
 
-        # 🔔 রিয়্যাকশন পাঠানোর পর দ্বিতীয় ইনবক্স মেসেজ
+        # 🔔 ২nd অর্ডার রেজাল্ট নোটিফিকেশন
         if success:
             uinfo["credit"] -= 10
             if uinfo["credit"] < 0: uinfo["credit"] = 0
@@ -507,7 +511,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             try:
                 await context.bot.send_message(
                     chat_id=user_chat_id,
-                    text=f"🎉 **রিয়্যাকশন সফলভাবে পাঠানো হয়েছে!**\n\n"
+                    text=f"🎉 **রিয়্যাকশন অর্ডার সফল হয়েছে!**\n\n"
                          f"📢 **চ্যানেল:** {ch_name}\n"
                          f"🚀 **পরিমাণ:** {target_count} টি (POSITIVE)\n"
                          f"🆔 **অর্ডার আইডি:** `{order_id}`\n"
@@ -519,11 +523,11 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             try:
                 await context.bot.send_message(
                     chat_id=user_chat_id,
-                    text=f"🚨 **সমস্যা হয়েছে! রিয়্যাকশন পাঠানো সম্ভব হয়নি।**\n\n"
+                    text=f"🚨 **অর্ডার ব্যর্থ হয়েছে!**\n\n"
                          f"📢 **চ্যানেল:** {ch_name}\n"
                          f"📌 **পোস্ট লিঙ্ক:** {post_link}\n"
                          f"❌ **এরর কারণ:** `{error_reason}`\n\n"
-                         f"💡 আপনার কয়েন কাটা হয়নি। সহায়তার জন্য অ্যাডমিনকে জানান।",
+                         f"💡 আপনার কয়েন কাটা হয়নি।",
                     reply_markup=admin_keyboard
                 )
             except Exception as e:
@@ -692,10 +696,10 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('admin', admin_panel_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
     
-    # 📢 চ্যানেলের নতুন পোস্ট রিড করার নির্দিষ্ট হ্যান্ডলার
-    app.add_handler(MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post))
+    # 📢 চ্যানেলের অল পোস্ট ফিল্টার (নতুন ও এডিটেড দুই পোস্টই রিড করবে)
+    app.add_handler(MessageHandler(filters.CHAT & (filters.UpdateType.CHANNEL_POST | filters.UpdateType.EDITED_CHANNEL_POST), auto_react_channel_post))
 
-    logger.info("🤖 SMM Reaction Bot Fully Operational...")
+    logger.info("🤖 SMM Reaction Bot Engine Active...")
     
-    # 🌟 প্রধান ফিক্স: টেলিগ্রামকে বলা যে চ্যানেল পোস্টের আপডেটও গ্রহণ করতে হবে
+    # 🌟 টেলিগ্রামকে চ্যানেল পোস্টের আপডেট পেতে বাধ্য করা
     app.run_polling(allowed_updates=["message", "edited_message", "channel_post", "edited_channel_post", "callback_query"])
