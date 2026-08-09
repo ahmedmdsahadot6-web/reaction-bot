@@ -52,7 +52,7 @@ ADMIN_USERNAME = "@SOYABUR_AS_LEADER"
 
 # 🌐 SMM Panel (1xpanel.com) API Config
 SMM_API_URL = "https://1xpanel.com/api/v2"
-SMM_API_KEY = "ebf82dcd2ffec6bcceb81bf05caafc47"  # ⚠️ এখানে আপনার 1xpanel-এর API Key দিন
+SMM_API_KEY = "792d092f1f7fdcebcb9233107b2f1f33"  # ⚠️ এখানে আপনার 1xpanel-এর API Key দিন
 SMM_SERVICE_ID = 1936 # স্ক্রিনশট থেকে সার্ভিস আইডি
 
 DB_FILE = "database.json"
