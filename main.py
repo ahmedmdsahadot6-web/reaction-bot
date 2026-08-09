@@ -335,6 +335,7 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     return STEP_REVIEW
 
+# 🌟 নতুন কানেকশন মেসেজ ফিচারযুক্ত প্রজেক্ট সেটিং
 async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -347,16 +348,32 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     ch_username = draft.get('username')
     try:
+        # ১. চ্যানেল থেকে তথ্য সংগ্রহ ও টেস্ট পোস্ট
         chat_info = await context.bot.get_chat(f"@{ch_username}")
         channel_id = str(chat_info.id)
         channel_title = chat_info.title or ch_username
         logger.info(f"Project Channel Resolved: Name='{channel_title}', ID='{channel_id}'")
+
+        # 📢 সরাসরি চ্যানেলে কানেক্টেড মেসেজ পাঠানো
+        channel_post_text = (
+            f"🎉 **Bot Connected Successfully!**\n\n"
+            f"✅ এই চ্যানেলের সাথে অটো রিয়্যাকশন বট সফলভাবে যুক্ত করা হয়েছে।\n"
+            f"🚀 এখন থেকে প্রতিটি নতুন পোস্টে অটোমেটিক রিয়্যাকশন সার্ভিস সক্রিয় থাকবে।"
+        )
+        await context.bot.send_message(chat_id=chat_info.id, text=channel_post_text)
+
     except Exception as e:
-        logger.error(f"Failed to fetch channel info for @{ch_username}: {e}")
-        await query.message.reply_text(f"❌ চ্যানেলটি পাওয়া যায়নি! নিশ্চিত করুন বট চ্যানেলে Admin আছে। Error: {e}", reply_markup=get_user_keyboard())
+        logger.error(f"Failed to fetch or send message to channel @{ch_username}: {e}")
+        await query.message.reply_text(
+            f"❌ চ্যানেলে কানেক্ট করা সম্ভব হয়নি!\n\n"
+            f"⚠️ নিশ্চিত করুন বটকে চ্যানেলে **Admin** করা হয়েছে এবং **Post Messages** পারমিশন অন রাখা আছে।\n\n"
+            f"Error: {e}", 
+            reply_markup=get_user_keyboard()
+        )
         context.user_data.pop('draft_project', None)
         return ConversationHandler.END
 
+    # ২. ডাটাবেজে ডাটা সংরক্ষণ
     u_data = get_user_data(user_id)
     draft['channel_id'] = channel_id
     draft['channel_name'] = channel_title
@@ -367,12 +384,13 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data.pop('draft_project', None)
 
+    # ৩. ইউজারের কাছে সফল মেসেজ
     await query.message.reply_text(
         f"🎉 **প্রকল্প সফলভাবে তৈরি হয়েছে!**\n\n"
         f"📁 চ্যানেল: {channel_title}\n"
         f"🆔 চ্যানেল আইডি: `{channel_id}`\n"
         f"🚀 রিয়্যাকশন সংখ্যা: {draft['count']} টি\n\n"
-        f"এখন চ্যানেলে নতুন পোস্ট করার সাথে সাথে বট আপনাকে নোটিফিকেশন দেবে এবং রিয়্যাকশন পাঠাবে!",
+        f"✅ আপনার চ্যানেলেও কনফার্মেশন মেসেজ পাঠানো হয়েছে!",
         reply_markup=get_user_keyboard()
     )
     return ConversationHandler.END
@@ -470,7 +488,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                 text=f"📢 **চ্যানেলে নতুন পোস্ট শনাক্ত হয়েছে!**\n\n"
                      f"📁 **চ্যানেল:** {ch_name}\n"
                      f"📌 **পোস্ট লিঙ্ক:** {post_link}\n\n"
-                     f"⏳ অটো-রিয়্যাকশন অর্ডার পাঠানো হচ্ছে..."
+                     f"⏳ অটো-রিয়্যাকশন অর্ডার পাঠানো হচ্ছে..."
             )
         except Exception as e:
             logger.error(f"Failed to notify user {uid}: {e}")
@@ -657,7 +675,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 if __name__ == '__main__':
     keep_alive()
     
-    # ⚡ নেটওয়ার্ক টাইমআউট সমাধান
     app = (
         ApplicationBuilder()
         .token(BOT_TOKEN)
@@ -696,7 +713,6 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('admin', admin_panel_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
     
-    # 📢 চ্যানেলের পোস্ট ফিল্টার (সঠিক টাইপ)
     app.add_handler(MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post))
 
     logger.info("🤖 SMM Reaction Bot Engine Active...")
