@@ -480,7 +480,6 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
                 [InlineKeyboardButton("📢 চ্যানেল এডিট", callback_data=f"fe_{idx}_channel")],
                 [InlineKeyboardButton("📊 রিয়্যাকশন সংখ্যা এডিট", callback_data=f"fe_{idx}_count")],
                 [InlineKeyboardButton("👁️ ভিউস সংখ্যা এডিট", callback_data=f"fe_{idx}_views")],
-                [InlineKeyboardButton("😊 ইমোজি এডিট", callback_data=f"fe_{idx}_emojis")],
                 [InlineKeyboardButton("🔙 ব্যাক", callback_data="p_back")]
             ]
             await query.edit_message_text(
@@ -497,8 +496,7 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
         prompt_messages = {
             "channel": "✍️ **নতুন চ্যানেল লিঙ্ক লিখে পাঠান:**\n(যেমন: `https://t.me/your_channel`) \n\n⚠️ নিশ্চিত করুন বটটি নতুন চ্যানেলেও অ্যাডমিন আছে!",
             "count": "✍️ **নতুন রিয়্যাকশন সংখ্যা লিখে পাঠান:**\n(যেমন: `100`, `200`, `500`)",
-            "views": "✍️ **নতুন ভিডিও ভিউস সংখ্যা লিখে পাঠান:**\n(যেমন: `0`, `100`, `500`)",
-            "emojis": "✍️ **নতুন ইমোজি লিখে পাঠান:**\n(যেমন: `👍❤️🔥` অথবা `POSITIVE`)"
+            "views": "✍️ **নতুন ভিডিও ভিউস সংখ্যা লিখে পাঠান:**\n(যেমন: `0`, `100`, `500`)"
         }
         
         msg_to_send = prompt_messages.get(field, "✍️ **নতুন মান লিখে পাঠান:**")
