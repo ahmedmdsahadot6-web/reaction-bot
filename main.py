@@ -52,8 +52,8 @@ ADMIN_USERNAME = "@SOYABUR_AS_LEADER"
 
 # 🌐 SMM Panel (1xpanel.com) API Config
 SMM_API_URL = "https://1xpanel.com/api/v2"
-SMM_API_KEY = "792d092f1f7fdcebcb9233107b2f1f33"  # ⚠️ এখানে আপনার 1xpanel-এর API Key দিন
-SMM_SERVICE_ID = 1936 # স্ক্রিনশট থেকে সার্ভিস আইডি
+SMM_API_KEY = "792d092f1f7fdcebcb9233107b2f1f33"
+SMM_SERVICE_ID = 1936 
 
 DB_FILE = "database.json"
 
@@ -310,7 +310,7 @@ async def emoji_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         draft['emojis'] = "NEGATIVE 👎💔💩"
         return await render_emoji_menu(update, context)
     elif query.data == "em_custom":
-        await query.message.reply_text("✍️ আপনার পছন্দের ইমোজি লিখে পাঠান (যেমন: ❤️🔥🎉):", reply_markup=cancel_keyboard())
+        await query.message.reply_text("✍️ আপনার পছন্দের কাস্টম ইমোজি লিখে পাঠান (যেমন: ❤️🔥🎉):", reply_markup=cancel_keyboard())
         return STEP_CUSTOM_EMOJI
 
 async def save_custom_emoji(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -383,7 +383,7 @@ async def speed_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft['speed'] = speed_map.get(query.data, "তাৎক্ষণিক ডেলিভারি (দ্রুত)")
     return await render_speed_menu(update, context)
 
-# 📊 ধাপ ৬ • রিয়্যাকশন সংখ্যা (১০ থেকে ৫০০০)
+# 📊 ধাপ ৬ • রিয়্যাকশন সংখ্যা
 async def render_count_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     text = (
@@ -411,7 +411,7 @@ async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft['count'] = int(query.data.split("_")[1])
     return await render_count_menu(update, context)
 
-# 👁️ ধাপ ৭ • ভিডিও ভিউস সংখ্যা (১০ থেকে ৫০০০)
+# 👁️ ধাপ ৭ • ভিডিও ভিউস সংখ্যা
 async def render_views_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     text = (
@@ -523,6 +523,7 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('draft_project', None)
+    context.user_data.pop('edit_target', None)
     msg_text = "প্রক্রিয়া বাতিল করা হলো।"
     if update.callback_query:
         await update.callback_query.message.reply_text(msg_text, reply_markup=get_user_keyboard())
@@ -553,6 +554,7 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
         if 0 <= idx < len(projects):
             proj = projects[idx]
             kb = [
+                [InlineKeyboardButton("📢 চ্যানেল এডিট", callback_data=f"fe_{idx}_channel")],
                 [InlineKeyboardButton("📊 রিয়্যাকশন সংখ্যা এডিট", callback_data=f"fe_{idx}_count")],
                 [InlineKeyboardButton("👁️ ভিউস সংখ্যা এডিট", callback_data=f"fe_{idx}_views")],
                 [InlineKeyboardButton("😊 ইমোজি এডিট", callback_data=f"fe_{idx}_emojis")],
@@ -569,11 +571,16 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
         idx, field = int(parts[1]), parts[2]
         context.user_data['edit_target'] = {'idx': idx, 'field': field}
         
-        await query.message.reply_text(
-            f"✍️ **নতুন মান লিখে পাঠান:**\n"
-            f"(যেমন: রিয়্যাকশন/ভিউস হলে সংখ্যা যেমন: `200` বা ইমোজি হলে লিখুন `👍❤️🔥`)",
-            reply_markup=cancel_keyboard()
-        )
+        # 📌 ইউজারের সিলেক্ট করা বিষয় অনুযায়ী নির্দিষ্ট কাস্টম বার্তা দেওয়া হচ্ছে
+        prompt_messages = {
+            "channel": "✍️ **নতুন চ্যানেল লিঙ্ক লিখে পাঠান:**\n(যেমন: `https://t.me/your_channel`) \n\n⚠️ নিশ্চিত করুন বটটি নতুন চ্যানেলেও অ্যাডমিন আছে!",
+            "count": "✍️ **নতুন রিয়্যাকশন সংখ্যা লিখে পাঠান:**\n(যেমন: `100`, `200`, `500`)",
+            "views": "✍️ **নতুন ভিডিও ভিউস সংখ্যা লিখে পাঠান:**\n(যেমন: `0`, `100`, `500`)",
+            "emojis": "✍️ **নতুন ইমোজি লিখে পাঠান:**\n(যেমন: `👍❤️🔥` অথবা `POSITIVE`)"
+        }
+        
+        msg_to_send = prompt_messages.get(field, "✍️ **নতুন মান লিখে পাঠান:**")
+        await query.message.reply_text(msg_to_send, reply_markup=cancel_keyboard())
         return STEP_EDIT_VALUE
 
     elif data == "p_back":
@@ -599,11 +606,32 @@ async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     field = target['field']
 
     if 0 <= idx < len(projects):
-        if field in ['count', 'views']:
+        if field == 'channel':
+            if "https://t.me/" not in val_txt:
+                await update.message.reply_text("❌ লিঙ্কটি সঠিক নয়! লিঙ্কের শুরুতে 'https://t.me/' থাকতে হবে। আবার চেষ্টা করুন:")
+                return STEP_EDIT_VALUE
+
+            match = re.search(r'https://t\.me/([^\s/]+)', val_txt)
+            if not match:
+                await update.message.reply_text("❌ সঠিক চ্যানেল লিংক পাওয়া যায়নি! আবার নতুন লিংক পাঠান:")
+                return STEP_EDIT_VALUE
+
+            ch_username = match.group(1).replace("@", "")
+            try:
+                chat_info = await context.bot.get_chat(f"@{ch_username}")
+                projects[idx]['channel_id'] = str(chat_info.id)
+                projects[idx]['channel_name'] = chat_info.title or ch_username
+                projects[idx]['target_url'] = f"https://t.me/{ch_username}"
+                projects[idx]['username'] = ch_username
+            except Exception as e:
+                await update.message.reply_text("❌ বটের পক্ষে চ্যানেলে এক্সেস পাওয়া যায়নি! নিশ্চিত করুন বটকে ঐ চ্যানেলে **Admin** করা হয়েছে। আবার লিংক পাঠান:")
+                return STEP_EDIT_VALUE
+
+        elif field in ['count', 'views']:
             try:
                 projects[idx][field] = int(val_txt)
             except ValueError:
-                await update.message.reply_text("❌ অনুগ্রহ করে শুধু সংখ্যা লিখুন!")
+                await update.message.reply_text("❌ অনুগ্রহ করে শুধু সংখ্যা লিখে পাঠান!")
                 return STEP_EDIT_VALUE
         else:
             projects[idx][field] = val_txt
@@ -633,6 +661,7 @@ async def show_my_projects(message_obj, user_id):
         p_text = (
             f"📁 **প্রজেক্ট #{idx+1}: {p.get('channel_name', 'চ্যানেল')}**\n"
             f"───────────────────\n"
+            f"🔗 লিঙ্ক: {p.get('target_url')}\n"
             f"⚙️ স্ট্যাটাস: **{st}**\n"
             f"🚀 রিয়্যাকশন: **{p.get('count', 100)}** টি\n"
             f"👁️ ভিউস: **{p.get('views', 0)}** টি\n"
@@ -659,7 +688,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             proj_cid = str(proj.get("channel_id", ""))
             proj_uname = str(proj.get("username", "")).lower().replace("@", "")
 
-            # 🛑 প্রজেক্ট যদি OFF থাকে তবে স্কিপ করবে (অর্ডার যাবে না)
+            # 🛑 প্রজেক্ট যদি OFF থাকে তবে স্কিপ করবে
             if proj.get("status", "ON") == "OFF":
                 logger.info(f"⏸️ Project is OFF for Channel {proj_cid}. Skipping order.")
                 continue
@@ -677,7 +706,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
         ch_name = proj.get("channel_name", "চ্যানেল")
         reaction_count = proj.get("count", 100)
 
-        # পোস্টের সঠিক লিংক তৈরি
+        # পোস্টের লিংক তৈরি
         if chat_username:
             post_link = f"https://t.me/{chat_username}/{post_id}"
         elif proj.get("username"):
@@ -686,7 +715,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             clean_cid = raw_channel_id.replace("-100", "")
             post_link = f"https://t.me/c/{clean_cid}/{post_id}"
 
-        # ইউজার ব্যালেন্স চেক (১ রিয়্যাকশন = ১ কয়েন হিসেবে ধরা হলো)
+        # ব্যালেন্স চেক
         if uinfo.get("credit", 0) < reaction_count:
             try:
                 await context.bot.send_message(
@@ -708,7 +737,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
 
         if smm_res and "order" in smm_res:
             order_id = smm_res["order"]
-            # কয়েন কাটা হলো
             uinfo["credit"] -= reaction_count
             save_data(db)
 
