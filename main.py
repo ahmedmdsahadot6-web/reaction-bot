@@ -335,7 +335,6 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     return STEP_REVIEW
 
-# 🌟 নতুন কানেকশন মেসেজ ফিচারযুক্ত প্রজেক্ট সেটিং
 async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -348,13 +347,12 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     ch_username = draft.get('username')
     try:
-        # ১. চ্যানেল থেকে তথ্য সংগ্রহ ও টেস্ট পোস্ট
         chat_info = await context.bot.get_chat(f"@{ch_username}")
         channel_id = str(chat_info.id)
         channel_title = chat_info.title or ch_username
         logger.info(f"Project Channel Resolved: Name='{channel_title}', ID='{channel_id}'")
 
-        # 📢 সরাসরি চ্যানেলে কানেক্টেড মেসেজ পাঠানো
+        # 📢 কানেক্টেড মেসেজ শুধু চ্যানেলে যাবে
         channel_post_text = (
             f"🎉 **Bot Connected Successfully!**\n\n"
             f"✅ এই চ্যানেলের সাথে অটো রিয়্যাকশন বট সফলভাবে যুক্ত করা হয়েছে।\n"
@@ -373,7 +371,6 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop('draft_project', None)
         return ConversationHandler.END
 
-    # ২. ডাটাবেজে ডাটা সংরক্ষণ
     u_data = get_user_data(user_id)
     draft['channel_id'] = channel_id
     draft['channel_name'] = channel_title
@@ -384,13 +381,12 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data.pop('draft_project', None)
 
-    # ৩. ইউজারের কাছে সফল মেসেজ
     await query.message.reply_text(
         f"🎉 **প্রকল্প সফলভাবে তৈরি হয়েছে!**\n\n"
         f"📁 চ্যানেল: {channel_title}\n"
         f"🆔 চ্যানেল আইডি: `{channel_id}`\n"
         f"🚀 রিয়্যাকশন সংখ্যা: {draft['count']} টি\n\n"
-        f"✅ আপনার চ্যানেলেও কনফার্মেশন মেসেজ পাঠানো হয়েছে!",
+        f"✅ চ্যানেলেও নোটিফিকেশন পাঠানো হয়েছে!",
         reply_markup=get_user_keyboard()
     )
     return ConversationHandler.END
@@ -419,7 +415,6 @@ def send_smm_reaction_order(post_link, count):
     
     try:
         response = requests.post(SMM_API_URL, data=payload, timeout=20)
-        
         try:
             res_json = response.json()
             logger.info(f"[SMM-API] Response: {res_json}")
@@ -439,7 +434,7 @@ def send_smm_reaction_order(post_link, count):
     except Exception as e:
         return False, None, f"Server Error: {str(e)}"
 
-# 📢 অটো পোস্ট ক্যাচিং ও মাল্টি-লেভেল ট্র্যাকিং
+# 🔔 চ্যানেলে নতুন পোস্ট হলেই ইউজারের ইনবক্সে (বটে) নোটিফিকেশন পাঠাবে
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.channel_post or update.edited_channel_post
     if not msg or not msg.chat:
@@ -482,17 +477,21 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             clean_cid = raw_channel_id.replace("-100", "")
             post_link = f"https://t.me/c/{clean_cid}/{post_id}"
 
+        # 📨 ইউজারের ইনবক্সে (বটে) নতুন পোস্টের নোটিফিকেশন ও লিংক পাঠানো
+        post_btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔗 পোস্টে যান", url=post_link)]])
         try:
             await context.bot.send_message(
                 chat_id=user_chat_id,
-                text=f"📢 **চ্যানেলে নতুন পোস্ট শনাক্ত হয়েছে!**\n\n"
-                     f"📁 **চ্যানেল:** {ch_name}\n"
-                     f"📌 **পোস্ট লিঙ্ক:** {post_link}\n\n"
-                     f"⏳ অটো-রিয়্যাকশন অর্ডার পাঠানো হচ্ছে..."
+                text=f"🔔 **চ্যানেলে একটি নতুন পোস্ট করা হয়েছে!**\n\n"
+                     f"📢 **চ্যানেল:** {ch_name}\n"
+                     f"🔗 **পোস্ট লিঙ্ক:** {post_link}\n\n"
+                     f"⏳ অটো-রিয়্যাকশন প্রসেস করা হচ্ছে...",
+                reply_markup=post_btn
             )
         except Exception as e:
-            logger.error(f"Failed to notify user {uid}: {e}")
+            logger.error(f"Failed to send post notification to user {uid}: {e}")
 
+        # কয়েন চেক
         if uinfo.get("credit", 0) <= 0:
             try:
                 await context.bot.send_message(
@@ -508,6 +507,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
 
         target_count = max(100, proj.get("count", 100))
 
+        # API রিকোয়েস্ট পাঠানো
         success, order_id, error_reason = await asyncio.to_thread(
             send_smm_reaction_order, post_link, target_count
         )
