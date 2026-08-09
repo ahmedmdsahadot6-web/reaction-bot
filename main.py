@@ -361,6 +361,17 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         channel_title = chat_info.title or ch_username
         logger.info(f"Project Channel Resolved: Name='{channel_title}', ID='{channel_id}'")
 
+        # 📌 ১. কানেক্ট হওয়ার পরই চ্যানেলে আগের মতো অটো-মেসেজ পাঠানো
+        try:
+            await context.bot.send_message(
+                chat_id=chat_info.id,
+                text=f"🤖 **Bot Connected Successfully!**\n\n"
+                     f"✅ @{BOT_USERNAME} সফলভাবে এই চ্যানেলে কানেক্ট হয়েছে।\n"
+                     f"🚀 এখন থেকে প্রতিটি নতুন পোস্টের লিংক অটোমেটিক বটের কাছে চলে যাবে।"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send confirmation message to channel: {e}")
+
     except Exception as e:
         logger.error(f"Failed to fetch channel @{ch_username}: {e}")
         await query.message.reply_text(
@@ -387,7 +398,7 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📁 চ্যানেল: {channel_title}\n"
         f"🆔 চ্যানেল আইডি: `{channel_id}`\n"
         f"🚀 রিয়্যাকশন সংখ্যা: {draft['count']} টি\n\n"
-        f"✅ এখন থেকে চ্যানেলে নতুন পোস্ট করার সাথে সাথে বট আপনাকে ইনবক্সে নোটিফিকেশন দেবে!",
+        f"✅ চ্যানেলে মেসেজ পাঠানো হয়েছে এবং প্রজেক্ট একটিভ করা হয়েছে!",
         reply_markup=get_user_keyboard()
     )
     return ConversationHandler.END
@@ -401,7 +412,7 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg_text, reply_markup=get_user_keyboard())
     return ConversationHandler.END
 
-# 🔔 চ্যানেলে নতুন পোস্ট হলেই ইউজারের ইনবক্সে (বটে) লিংক পাঠানো
+# 🔔 📌 ২. চ্যানেলে নতুন যেকোনো পোস্ট করার সাথে সাথেই ইনবক্সে পাঠানো
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.channel_post or update.edited_channel_post
     if not msg or not msg.chat:
@@ -411,7 +422,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
     chat_username = (msg.chat.username or "").lower()
     post_id = msg.message_id
 
-    logger.info(f"📢 [POST DETECTED] ID: {raw_channel_id} | Username: @{chat_username} | Message ID: {post_id}")
+    logger.info(f"📢 [POST DETECTED] Channel ID: {raw_channel_id} | Username: @{chat_username} | Message ID: {post_id}")
 
     matched_projects = []
 
@@ -420,13 +431,14 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             proj_cid = str(proj.get("channel_id", ""))
             proj_uname = str(proj.get("username", "")).lower().replace("@", "")
 
+            # ফ্লেক্সিবল আইডি/ইউজারনেম ফিল্টারিং
             if (proj_cid and proj_cid == raw_channel_id) or \
                (chat_username and proj_uname == chat_username) or \
                (proj_cid.replace("-100", "") == raw_channel_id.replace("-100", "")):
                 matched_projects.append((uid, uinfo, proj))
 
     if not matched_projects:
-        logger.info(f"⚠️ No active project found for post in channel {raw_channel_id}")
+        logger.info(f"⚠️ No active project found for channel post: {raw_channel_id}")
         return
 
     for uid, uinfo, proj in matched_projects:
@@ -441,10 +453,9 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             clean_cid = raw_channel_id.replace("-100", "")
             post_link = f"https://t.me/c/{clean_cid}/{post_id}"
 
-        # 📨 ইউজারের ইনবক্সে (বটে) নতুন পোস্টের নোটিফিকেশন ও লিঙ্ক পাঠানো
-        post_btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔗 পোস্টে যান", url=post_link)]])
+        # 📨 ইউজারের ইনবক্সে (বটে) পোস্টের সরাসরি নোটিফিকেশন ও লিঙ্ক পাঠানো
+        post_btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔗 সরাসরি পোস্টে যান", url=post_link)]])
         
-        # কয়েন কাটবে (১০ কয়েন)
         if uinfo.get("credit", 0) >= 10:
             uinfo["credit"] -= 10
             save_data(db)
@@ -454,14 +465,14 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                 chat_id=user_chat_id,
                 text=f"🔔 **চ্যানেলে একটি নতুন পোস্ট করা হয়েছে!**\n\n"
                      f"📢 **চ্যানেল:** {ch_name}\n"
-                     f"🚀 **সেট করা রিয়্যাকশন:** {proj.get('count', 100)} টি\n"
+                     f"🚀 **সেট করা সীমা:** {proj.get('count', 100)} টি\n"
                      f"💰 **অবশিষ্ট কয়েন:** {uinfo.get('credit', 0)}\n\n"
-                     f"🔗 **পোস্ট লিঙ্ক:** {post_link}",
+                     f"📌 **পোস্ট লিঙ্ক:** {post_link}",
                 reply_markup=post_btn
             )
-            logger.info(f"✅ Post Alert sent to User: {uid}")
+            logger.info(f"✅ Success Alert sent to User: {uid}")
         except Exception as e:
-            logger.error(f"Failed to send post notification to user {uid}: {e}")
+            logger.error(f"Failed to send post alert to user {uid}: {e}")
 
 # 👑 Admin commands
 async def start_add_credit(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -629,14 +640,15 @@ if __name__ == '__main__':
         fallbacks=[CommandHandler('start', start), MessageHandler(filters.Regex("^(❌ বাতিল করুন|বাতিল করুন)$"), cancel_flow)]
     )
 
+    # 📌 চ্যানেল পোস্ট সরাসরি হ্যান্ডেল করার ফিল্টার
+    channel_handler = MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post)
+    
+    app.add_handler(channel_handler)
     app.add_handler(conv_handler)
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
-    
-    # 📌 চ্যানেলে পোস্ট হলেই সাথে সাথে ইউজারের ইনবক্সে নোটিফাই করার জন্য
-    app.add_handler(MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post))
 
-    logger.info("🤖 Reaction Bot Engine Active...")
+    logger.info("🤖 Channel Post Catcher Engine Active...")
     
     app.run_polling(allowed_updates=["message", "edited_message", "channel_post", "edited_channel_post", "callback_query"])
