@@ -14,21 +14,39 @@ from telegram.ext import (
     MessageHandler, filters, ContextTypes, ConversationHandler
 )
 
-# 🌐 Keep-Alive Web Server
+# 🌐 Keep-Alive Web Server + Self Ping System
 web_app = Flask('')
 
 @web_app.route('/')
 def home():
     return "SMM Auto Reaction Bot Engine: ACTIVE 24/7"
 
+def ping_self():
+    """Render সার্ভার যাতে কখনো স্লিপ মোডে না যায় তার জন্য ৫ মিনিট পর পর সেলফ-পিং"""
+    render_url = os.environ.get("RENDER_EXTERNAL_URL")
+    if not render_url:
+        render_url = "https://reaction-bot-7d1u.onrender.com"
+        
+    while True:
+        try:
+            asyncio.run(asyncio.sleep(280)) # ৪분 ৫০ সেকেন্ড পরপর পিং
+            requests.get(render_url, timeout=10)
+            logger.info("📡 Self Ping Sent to keep Render active 24/7")
+        except Exception as e:
+            logger.warning(f"Self Ping Warning: {e}")
+
 def run_web():
     port = int(os.environ.get("PORT", 10000))
     web_app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
-    t = Thread(target=run_web)
-    t.daemon = True
-    t.start()
+    t_web = Thread(target=run_web)
+    t_web.daemon = True
+    t_web.start()
+    
+    t_ping = Thread(target=ping_self)
+    t_ping.daemon = True
+    t_ping.start()
 
 # 🔑 কনফিগারেশন
 BOT_TOKEN = "8320025447:AAFWnP_asWXs6WXS-h_gPAy6Baikd6-4jMc"
@@ -335,6 +353,7 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     return STEP_REVIEW
 
+# 🌟 প্রজেক্ট ফাইনাল সেটআপ (চ্যানেলে কোনো মেসেজ দেবে না)
 async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -352,19 +371,11 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         channel_title = chat_info.title or ch_username
         logger.info(f"Project Channel Resolved: Name='{channel_title}', ID='{channel_id}'")
 
-        # 📢 কানেক্টেড মেসেজ শুধু চ্যানেলে যাবে
-        channel_post_text = (
-            f"🎉 **Bot Connected Successfully!**\n\n"
-            f"✅ এই চ্যানেলের সাথে অটো রিয়্যাকশন বট সফলভাবে যুক্ত করা হয়েছে।\n"
-            f"🚀 এখন থেকে প্রতিটি নতুন পোস্টে অটোমেটিক রিয়্যাকশন সার্ভিস সক্রিয় থাকবে।"
-        )
-        await context.bot.send_message(chat_id=chat_info.id, text=channel_post_text)
-
     except Exception as e:
-        logger.error(f"Failed to fetch or send message to channel @{ch_username}: {e}")
+        logger.error(f"Failed to fetch channel @{ch_username}: {e}")
         await query.message.reply_text(
             f"❌ চ্যানেলে কানেক্ট করা সম্ভব হয়নি!\n\n"
-            f"⚠️ নিশ্চিত করুন বটকে চ্যানেলে **Admin** করা হয়েছে এবং **Post Messages** পারমিশন অন রাখা আছে।\n\n"
+            f"⚠️ নিশ্চিত করুন বটকে চ্যানেলে **Admin** করা হয়েছে।\n\n"
             f"Error: {e}", 
             reply_markup=get_user_keyboard()
         )
@@ -386,7 +397,7 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📁 চ্যানেল: {channel_title}\n"
         f"🆔 চ্যানেল আইডি: `{channel_id}`\n"
         f"🚀 রিয়্যাকশন সংখ্যা: {draft['count']} টি\n\n"
-        f"✅ চ্যানেলেও নোটিফিকেশন পাঠানো হয়েছে!",
+        f"✅ এখন থেকে চ্যানেলে নতুন পোস্ট করার সাথে সাথে বট আপনাকে ইনবক্সে নোটিফিকেশন দেবে এবং রিয়্যাকশন পাঠাবে!",
         reply_markup=get_user_keyboard()
     )
     return ConversationHandler.END
@@ -434,7 +445,7 @@ def send_smm_reaction_order(post_link, count):
     except Exception as e:
         return False, None, f"Server Error: {str(e)}"
 
-# 🔔 চ্যানেলে নতুন পোস্ট হলেই ইউজারের ইনবক্সে (বটে) নোটিফিকেশন পাঠাবে
+# 🔔 চ্যানেলে পোস্ট ক্যাচার ও ইউজারের ইনবক্সে মেসেজ নোটিফিকেশন
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.channel_post or update.edited_channel_post
     if not msg or not msg.chat:
@@ -477,7 +488,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             clean_cid = raw_channel_id.replace("-100", "")
             post_link = f"https://t.me/c/{clean_cid}/{post_id}"
 
-        # 📨 ইউজারের ইনবক্সে (বটে) নতুন পোস্টের নোটিফিকেশন ও লিংক পাঠানো
+        # 📨 ইউজারের ইনবক্সে (বটে) নতুন পোস্টের নোটিফিকেশন পাঠানো
         post_btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔗 পোস্টে যান", url=post_link)]])
         try:
             await context.bot.send_message(
@@ -491,7 +502,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
         except Exception as e:
             logger.error(f"Failed to send post notification to user {uid}: {e}")
 
-        # কয়েন চেক
+        # কয়েন চেক
         if uinfo.get("credit", 0) <= 0:
             try:
                 await context.bot.send_message(
@@ -507,7 +518,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
 
         target_count = max(100, proj.get("count", 100))
 
-        # API রিকোয়েস্ট পাঠানো
+        # SMM API রিকোয়েস্ট
         success, order_id, error_reason = await asyncio.to_thread(
             send_smm_reaction_order, post_link, target_count
         )
