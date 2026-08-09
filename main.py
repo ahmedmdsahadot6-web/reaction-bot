@@ -45,8 +45,8 @@ def keep_alive():
     t_ping.start()
 
 # 🔑 কনফিগারেশন
-BOT_TOKEN = "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw"
-BOT_USERNAME = "@Sahadot_reaction123_bot"
+BOT_TOKEN = "8320025447:AAFWnP_asWXs6WXS-h_gPAy6Baikd6-4jMc"
+BOT_USERNAME = "TGSUPER_SERVICE_BOT"
 ADMIN_IDS = [8454401183, 7871224176]
 ADMIN_USERNAME = "@SOYABUR_AS_LEADER"
 
@@ -87,10 +87,9 @@ if "users" not in db: db["users"] = {}
 if "blocked" not in db: db["blocked"] = []
 
 # States
-(STEP_CHANNEL, STEP_STATUS, STEP_EMOJI, STEP_CUSTOM_EMOJI, STEP_DISTRIBUTION, 
- STEP_SPEED, STEP_COUNT, STEP_VIEWS, STEP_REVIEW, 
- STEP_EDIT_FIELD, STEP_EDIT_VALUE,
- STEP_ADMIN_ADD_CREDIT, STEP_ADMIN_BLOCK_USER, STEP_ADMIN_BROADCAST) = range(14)
+(STEP_CHANNEL, STEP_DISTRIBUTION, STEP_SPEED, STEP_COUNT, STEP_VIEWS, 
+ STEP_REVIEW, STEP_EDIT_FIELD, STEP_EDIT_VALUE,
+ STEP_ADMIN_ADD_CREDIT, STEP_ADMIN_BLOCK_USER, STEP_ADMIN_BROADCAST) = range(11)
 
 def get_user_data(user_id):
     str_id = str(user_id)
@@ -243,94 +242,15 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['draft_project']['target_url'] = f"https://t.me/{ch_username}"
     context.user_data['draft_project']['username'] = ch_username
 
-    return await render_status_menu(update, context)
+    return await render_distribution_menu(update, context)
 
-# 🟢/🔴 ধাপ ২ • প্রজেক্ট স্ট্যাটাস (ON / OFF)
-async def render_status_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    draft = context.user_data.get('draft_project', {})
-    curr_status = draft.get('status', 'ON')
-    text = (
-        f"⚙️ **ধাপ ২ • প্রজেক্ট স্ট্যাটাস (ON / OFF)**\n"
-        f"───────────────────\n\n"
-        f"👉 বর্তমান স্ট্যাটাস: **{curr_status}**\n\n"
-        f"ON থাকলে নতুন পোস্টে অর্ডার যাবে, OFF থাকলে কোনো অর্ডার যাবে না।"
-    )
-    keyboard = [
-        [InlineKeyboardButton("🟢 ON (চালু)", callback_data="st_ON"), InlineKeyboardButton("🔴 OFF (বন্ধ)", callback_data="st_OFF")],
-        [InlineKeyboardButton("চালিয়ে যান ➔", callback_data="st_done")]
-    ]
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-    else:
-        await context.bot.send_message(chat_id=update.effective_user.id, text=text, reply_markup=InlineKeyboardMarkup(keyboard))
-    return STEP_STATUS
-
-async def status_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    draft = context.user_data.get('draft_project', {})
-
-    if query.data == "st_done":
-        return await render_emoji_menu(update, context)
-
-    draft['status'] = "ON" if query.data == "st_ON" else "OFF"
-    return await render_status_menu(update, context)
-
-# 😄 ধাপ ৩ • ইমোজি টাইপ নির্বাচন
-async def render_emoji_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    draft = context.user_data.get('draft_project', {})
-    curr_emoji = draft.get('emojis', 'POSITIVE 👍❤️🔥')
-
-    text = (
-        f"📝 **ধাপ ৩ • ইমোজি সিলেক্ট করুন**\n"
-        f"───────────────────\n\n"
-        f"👉 বর্তমান ইমোজি: **{curr_emoji}**\n\n"
-        f"নিচের বাটনে চাপ দিয়ে ইমোজি নির্বাচন করুন অথবা কাস্টম ইমোজি দিন:"
-    )
-    keyboard = [
-        [InlineKeyboardButton("👍 Positive (👍❤️🔥😍)", callback_data="em_pos")],
-        [InlineKeyboardButton("👎 Negative (👎💔💩)", callback_data="em_neg")],
-        [InlineKeyboardButton("✍️ কাস্টম ইমোজি লিখুন", callback_data="em_custom")],
-        [InlineKeyboardButton("চালিয়ে যান ➔", callback_data="em_done")]
-    ]
-    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-    return STEP_EMOJI
-
-async def emoji_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    draft = context.user_data.get('draft_project', {})
-
-    if query.data == "em_done":
-        return await render_distribution_menu(update, context)
-    elif query.data == "em_pos":
-        draft['emojis'] = "POSITIVE 👍❤️🔥"
-        return await render_emoji_menu(update, context)
-    elif query.data == "em_neg":
-        draft['emojis'] = "NEGATIVE 👎💔💩"
-        return await render_emoji_menu(update, context)
-    elif query.data == "em_custom":
-        await query.message.reply_text("✍️ আপনার পছন্দের কাস্টম ইমোজি লিখে পাঠান (যেমন: ❤️🔥🎉):", reply_markup=cancel_keyboard())
-        return STEP_CUSTOM_EMOJI
-
-async def save_custom_emoji(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg_txt = update.message.text.strip()
-    if msg_txt in ["❌ বাতিল করুন", "বাতিল করুন"]:
-        context.user_data.pop('draft_project', None)
-        await update.message.reply_text("প্রক্রিয়া বাতিল করা হলো।", reply_markup=get_user_keyboard())
-        return ConversationHandler.END
-
-    draft = context.user_data.get('draft_project', {})
-    draft['emojis'] = msg_txt
-    return await render_emoji_menu(update, context)
-
-# 🎲 ধাপ ৪ • বিতরণের ধরন
+# 🎲 ধাপ ২ • বিতরণের ধরন
 async def render_distribution_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     current_dist = draft.get('distribution', 'এলোমেলো')
     
     text = (
-        f"⚙️ **ধাপ ৪ • বিতরণের ধরন**\n"
+        f"⚙️ **ধাপ ২ • বিতরণের ধরন**\n"
         f"───────────────────\n\n"
         f"👉 বর্তমান সিলেক্টেড: **{current_dist}**"
     )
@@ -339,7 +259,10 @@ async def render_distribution_menu(update: Update, context: ContextTypes.DEFAULT
         [InlineKeyboardButton("⚖️ সব সমানভাবে", callback_data="dist_equal")],
         [InlineKeyboardButton("চালিয়ে যান ➔", callback_data="dist_done")]
     ]
-    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    else:
+        await context.bot.send_message(chat_id=update.effective_user.id, text=text, reply_markup=InlineKeyboardMarkup(keyboard))
     return STEP_DISTRIBUTION
 
 async def distribution_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -354,13 +277,13 @@ async def distribution_callback(update: Update, context: ContextTypes.DEFAULT_TY
     draft['distribution'] = dist_map.get(query.data, "এলোমেলো")
     return await render_distribution_menu(update, context)
 
-# ⚡ ধাপ ৫ • গতি নির্বাচন
+# ⚡ ধাপ ৩ • গতি নির্বাচন
 async def render_speed_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     current_speed = draft.get('speed', 'তাৎক্ষণিক ডেলিভারি (দ্রুত)')
 
     text = (
-        f"⚡ **ধাপ ৫ • গতি নির্বাচন**\n"
+        f"⚡ **ধাপ ৩ • গতি নির্বাচন**\n"
         f"───────────────────\n\n"
         f"👉 বর্তমান সিলেক্টেড: **{current_speed}**"
     )
@@ -383,11 +306,11 @@ async def speed_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft['speed'] = speed_map.get(query.data, "তাৎক্ষণিক ডেলিভারি (দ্রুত)")
     return await render_speed_menu(update, context)
 
-# 📊 ধাপ ৬ • রিয়্যাকশন সংখ্যা
+# 📊 ধাপ ৪ • রিয়্যাকশন সংখ্যা
 async def render_count_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     text = (
-        f"📊 **ধাপ ৬ • রিয়্যাকশন সংখ্যা নির্বাচন**\n"
+        f"📊 **ধাপ ৪ • রিয়্যাকশন সংখ্যা নির্বাচন**\n"
         f"───────────────────\n"
         f"👉 বর্তমান রিয়্যাকশন সংখ্যা: **{draft.get('count', 100)}** টি"
     )
@@ -411,11 +334,11 @@ async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft['count'] = int(query.data.split("_")[1])
     return await render_count_menu(update, context)
 
-# 👁️ ধাপ ৭ • ভিডিও ভিউস সংখ্যা
+# 👁️ ধাপ ৫ • ভিডিও ভিউস সংখ্যা
 async def render_views_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     text = (
-        f"👁️ **ধাপ ৭ • ভিডিও ভিউস নির্বাচন**\n"
+        f"👁️ **ধাপ ৫ • ভিডিও ভিউস নির্বাচন**\n"
         f"───────────────────\n"
         f"👉 বর্তমান ভিডিও ভিউস: **{draft.get('views', 0)}** টি\n"
         f"(ভিডিও পোস্ট হলে অটোমেটিক এই পরিমাণ ভিউস যোগ হবে)"
@@ -440,7 +363,7 @@ async def views_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft['views'] = int(query.data.split("_")[1])
     return await render_views_menu(update, context)
 
-# ✨ ধাপ ৮ • তথ্য যাচাই
+# ✨ চূড়ান্ত তথ্য যাচাই
 async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
 
@@ -571,7 +494,6 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
         idx, field = int(parts[1]), parts[2]
         context.user_data['edit_target'] = {'idx': idx, 'field': field}
         
-        # 📌 ইউজারের সিলেক্ট করা বিষয় অনুযায়ী নির্দিষ্ট কাস্টম বার্তা দেওয়া হচ্ছে
         prompt_messages = {
             "channel": "✍️ **নতুন চ্যানেল লিঙ্ক লিখে পাঠান:**\n(যেমন: `https://t.me/your_channel`) \n\n⚠️ নিশ্চিত করুন বটটি নতুন চ্যানেলেও অ্যাডমিন আছে!",
             "count": "✍️ **নতুন রিয়্যাকশন সংখ্যা লিখে পাঠান:**\n(যেমন: `100`, `200`, `500`)",
@@ -688,7 +610,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             proj_cid = str(proj.get("channel_id", ""))
             proj_uname = str(proj.get("username", "")).lower().replace("@", "")
 
-            # 🛑 প্রজেক্ট যদি OFF থাকে তবে স্কিপ করবে
             if proj.get("status", "ON") == "OFF":
                 logger.info(f"⏸️ Project is OFF for Channel {proj_cid}. Skipping order.")
                 continue
@@ -706,7 +627,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
         ch_name = proj.get("channel_name", "চ্যানেল")
         reaction_count = proj.get("count", 100)
 
-        # পোস্টের লিংক তৈরি
         if chat_username:
             post_link = f"https://t.me/{chat_username}/{post_id}"
         elif proj.get("username"):
@@ -715,7 +635,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             clean_cid = raw_channel_id.replace("-100", "")
             post_link = f"https://t.me/c/{clean_cid}/{post_id}"
 
-        # ব্যালেন্স চেক
         if uinfo.get("credit", 0) < reaction_count:
             try:
                 await context.bot.send_message(
@@ -731,7 +650,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                 logger.error(f"Error sending low balance msg: {e}")
             continue
 
-        # 🛒 SMM Panel API Call
         smm_res = send_smm_order(post_link, reaction_count)
         post_btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔗 সরাসরি পোস্টে যান", url=post_link)]])
 
@@ -914,9 +832,6 @@ if __name__ == '__main__':
         ],
         states={
             STEP_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_channel)],
-            STEP_STATUS: [CallbackQueryHandler(status_callback, pattern="^(st_)")],
-            STEP_EMOJI: [CallbackQueryHandler(emoji_callback, pattern="^(em_)")],
-            STEP_CUSTOM_EMOJI: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_custom_emoji)],
             STEP_DISTRIBUTION: [CallbackQueryHandler(distribution_callback, pattern="^(dist_)")],
             STEP_SPEED: [CallbackQueryHandler(speed_callback, pattern="^(spd_)")],
             STEP_COUNT: [CallbackQueryHandler(count_callback, pattern="^cnt_")],
@@ -933,7 +848,6 @@ if __name__ == '__main__':
         fallbacks=[CommandHandler('start', start), MessageHandler(filters.Regex("^(❌ বাতিল করুন|বাতিল করুন)$"), cancel_flow)]
     )
 
-    # 📌 চ্যানেল পোস্ট হ্যান্ডলার
     channel_handler = MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post)
     
     app.add_handler(channel_handler)
