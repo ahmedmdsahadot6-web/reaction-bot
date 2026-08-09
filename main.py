@@ -137,7 +137,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"👋 স্বাগতম {user.first_name}!\n\n"
         f"🚀 **Multi-Reaction SMM Engine Active**\n"
-        f"চ্যানেলে নতুন পোস্ট করার সাথে সাথে স্বয়ংক্রিয় রিয়্যাকশন পেতে প্রজেক্ট যোগ করুন।",
+        f"চ্যানেলে নতুন পোস্ট করার সাথে সাথে স্বয়ংক্রিয় রিয়্যাকশন পেতে প্রজেক্ট যোগ করুন।",
         reply_markup=get_user_keyboard()
     )
 
@@ -164,7 +164,7 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if u_data['credit'] <= 0:
         clean_admin = ADMIN_USERNAME.replace("@", "")
         inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 অ্যাডমিনকে মেসেজ দিন", url=f"https://t.me/{clean_admin}")]])
-        await update.message.reply_text("⚠️ আপনার পর্যাপ্ত কয়েন নেই!\nনতুন প্রজেক্ট তৈরি করতে রিচার্জ করুন।", reply_markup=inline_kb)
+        await update.message.reply_text("⚠️ আপনার পর্যাপ্ত কয়েন নেই!\nনতুন প্রজেক্ট তৈরি করতে রিচার্জ করুন।", reply_markup=inline_kb)
         return ConversationHandler.END
 
     context.user_data['draft_project'] = {
@@ -195,12 +195,12 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     if "https://t.me/" not in txt:
-        await msg.reply_text("❌ লিঙ্কটি সঠিক নয়! লিঙ্কের শুরুতে 'https://t.me/' থাকতে হবে। আবার চেষ্টা করুন:")
+        await msg.reply_text("❌ লিঙ্কটি সঠিক নয়! লিঙ্কের শুরুতে 'https://t.me/' থাকতে হবে। আবার চেষ্টা করুন:")
         return STEP_CHANNEL
 
     match = re.search(r'https://t\.me/([^\s/]+)', txt)
     if not match:
-        await msg.reply_text("❌ সঠিক চ্যানেল লিংক পাওয়া যায়নি! আবার লিংক পাঠান:")
+        await msg.reply_text("❌ সঠিক চ্যানেল লিংক পাওয়া যায়নি! আবার লিংক পাঠান:")
         return STEP_CHANNEL
 
     ch_username = match.group(1).replace("@", "")
@@ -213,7 +213,7 @@ async def render_emoji_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"📝 **ধাপ ২ • ইমোজি প্রকার**\n"
         f"───────────────────\n\n"
-        f"👉 এই সার্ভিসের জন্য পজিটিভ ( Positive 👍❤️🔥 ) রিয়্যাকশন সেট করা রয়েছে।\n\n"
+        f"👉 এই সার্ভিসের জন্য পজিটিভ ( Positive 👍❤️🔥 ) রিয়্যাকশন সেট করা রয়েছে।\n\n"
         f"'চালিয়ে যান ➔' বাটনে চাপুন:"
     )
 
@@ -294,7 +294,7 @@ async def render_count_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"📊 **ধাপ ৫ • রিয়্যাকশন সংখ্যা**\n"
         f"───────────────────\n"
-        f"⚠️ **নোট:** মিনিমাম ১০০ টি রিয়্যাকশন প্রয়োজন।\n\n"
+        f"⚠️ **নোট:** মিনিমাম ১০০ টি রিয়্যাকশন প্রয়োজন।\n\n"
         f"👉 বর্তমান রিয়্যাকশন সংখ্যা: {draft.get('count', 100)}"
     )
     keyboard = [
@@ -342,7 +342,7 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     draft = context.user_data.get('draft_project')
     if not draft or not draft.get('target_url'):
-        await query.message.reply_text("❌ সমস্যা হয়েছে, আবার চেষ্টা করুন!", reply_markup=get_user_keyboard())
+        await query.message.reply_text("❌ সমস্যা হয়েছে, আবার চেষ্টা করুন!", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
     ch_username = draft.get('username')
@@ -353,7 +353,7 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"Project Channel Resolved: Name='{channel_title}', ID='{channel_id}'")
     except Exception as e:
         logger.error(f"Failed to fetch channel info for @{ch_username}: {e}")
-        await query.message.reply_text(f"❌ চ্যানেলটি পাওয়া যায়নি! নিশ্চিত করুন বট চ্যানেলে Admin আছে। Error: {e}", reply_markup=get_user_keyboard())
+        await query.message.reply_text(f"❌ চ্যানেলটি পাওয়া যায়নি! নিশ্চিত করুন বট চ্যানেলে Admin আছে। Error: {e}", reply_markup=get_user_keyboard())
         context.user_data.pop('draft_project', None)
         return ConversationHandler.END
 
@@ -372,7 +372,7 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📁 চ্যানেল: {channel_title}\n"
         f"🆔 চ্যানেল আইডি: `{channel_id}`\n"
         f"🚀 রিয়্যাকশন সংখ্যা: {draft['count']} টি\n\n"
-        f"এখন চ্যানেলে নতুন পোস্ট করার সাথে সাথে বট আপনাকে নোটিফিকেশন দেবে এবং রিয়্যাকশন পাঠাবে!",
+        f"এখন চ্যানেলে নতুন পোস্ট করার সাথে সাথে বট আপনাকে নোটিফিকেশন দেবে এবং রিয়্যাকশন পাঠাবে!",
         reply_markup=get_user_keyboard()
     )
     return ConversationHandler.END
@@ -386,7 +386,7 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg_text, reply_markup=get_user_keyboard())
     return ConversationHandler.END
 
-# 🌐 1xpanel API Engine (উন্নত লিঙ্ক সাপোর্ট)
+# 🌐 1xpanel API Engine
 def send_smm_reaction_order(post_link, count):
     payload = {
         'key': SMM_API_KEY,
@@ -400,7 +400,7 @@ def send_smm_reaction_order(post_link, count):
     logger.info(f"[SMM-API] Sending Request -> URL: {post_link} | Quantity: {payload['quantity']}")
     
     try:
-        response = requests.post(SMM_API_URL, data=payload, timeout=15)
+        response = requests.post(SMM_API_URL, data=payload, timeout=20)
         
         try:
             res_json = response.json()
@@ -438,15 +438,11 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
 
     matched_projects = []
 
-    # সকল প্রজেক্টের সাথে নিখুঁতভাবে মেলানো (ID + Username)
     for uid, uinfo in db["users"].items():
         for proj in uinfo.get("projects", []):
             proj_cid = str(proj.get("channel_id", ""))
             proj_uname = str(proj.get("username", "")).lower().replace("@", "")
 
-            # ১. সরাসরি Channel ID দিয়ে ম্যাচ
-            # ২. Username দিয়ে ম্যাচ
-            # ৩. -100 সরিয়ে ID ম্যাচ
             if (proj_cid and proj_cid == raw_channel_id) or \
                (chat_username and proj_uname == chat_username) or \
                (proj_cid.replace("-100", "") == raw_channel_id.replace("-100", "")):
@@ -460,7 +456,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
         user_chat_id = int(uid)
         ch_name = proj.get("channel_name", "চ্যানেল")
 
-        # ১ক্সপ্যানেলের জন্য পারফেক্ট পোস্ট লিঙ্ক তৈরি
         if chat_username:
             post_link = f"https://t.me/{chat_username}/{post_id}"
         elif proj.get("username"):
@@ -469,7 +464,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             clean_cid = raw_channel_id.replace("-100", "")
             post_link = f"https://t.me/c/{clean_cid}/{post_id}"
 
-        # 🔔 পোস্ট শনাক্ত হওয়ার ১st নোটিফিকেশন
         try:
             await context.bot.send_message(
                 chat_id=user_chat_id,
@@ -481,14 +475,13 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
         except Exception as e:
             logger.error(f"Failed to notify user {uid}: {e}")
 
-        # ব্যালেন্স চেক
         if uinfo.get("credit", 0) <= 0:
             try:
                 await context.bot.send_message(
                     chat_id=user_chat_id,
-                    text=f"🚨 **রিঅ্যাকশন পাঠানো সম্ভব হয়নি!**\n\n"
+                    text=f"🚨 **রিঅ্যাকশন পাঠানো সম্ভব হয়নি!**\n\n"
                          f"📢 **চ্যানেল:** {ch_name}\n"
-                         f"❌ **কারণ:** আপনার একাউন্টে পর্যাপ্ত কয়েন নেই!",
+                         f"❌ **কারণ:** আপনার একাউন্টে পর্যাপ্ত কয়েন নেই!",
                     reply_markup=admin_keyboard
                 )
             except Exception as e:
@@ -497,12 +490,10 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
 
         target_count = max(100, proj.get("count", 100))
 
-        # SMM API দিয়ে রিয়্যাকশন অর্ডার প্লেস
         success, order_id, error_reason = await asyncio.to_thread(
             send_smm_reaction_order, post_link, target_count
         )
 
-        # 🔔 ২nd অর্ডার রেজাল্ট নোটিফিকেশন
         if success:
             uinfo["credit"] -= 10
             if uinfo["credit"] < 0: uinfo["credit"] = 0
@@ -527,7 +518,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                          f"📢 **চ্যানেল:** {ch_name}\n"
                          f"📌 **পোস্ট লিঙ্ক:** {post_link}\n"
                          f"❌ **এরর কারণ:** `{error_reason}`\n\n"
-                         f"💡 আপনার কয়েন কাটা হয়নি।",
+                         f"💡 আপনার কয়েন কাটা হয়নি।",
                     reply_markup=admin_keyboard
                 )
             except Exception as e:
@@ -548,7 +539,7 @@ async def process_admin_credit(update: Update, context: ContextTypes.DEFAULT_TYP
             save_data(db)
             await update.message.reply_text(f"✅ ইউজার {target_id} এর বর্তমান ব্যালেন্স: {db['users'][target_id]['credit']}", reply_markup=get_admin_keyboard())
         else:
-            await update.message.reply_text("❌ ইউজার আইডি পাওয়া যায়নি!", reply_markup=get_admin_keyboard())
+            await update.message.reply_text("❌ ইউজার আইডি পাওয়া যায়নি!", reply_markup=get_admin_keyboard())
     except Exception as e:
         await update.message.reply_text(f"❌ এরর: {e}", reply_markup=get_admin_keyboard())
     return ConversationHandler.END
@@ -603,7 +594,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif text == "📋 ইউজার লিস্ট":
             u_list = "📋 **ইউজার তালিকা:**\n───────────────────\n"
             for uid, uinfo in list(db['users'].items())[:15]:
-                u_list += f"🆔 `{uid}` | 💎 কয়েন: {uinfo.get('credit', 0)}\n"
+                u_list += f"🆔 `{uid}` | 💎 কয়েন: {uinfo.get('credit', 0)}\n"
             return await update.message.reply_text(u_list, reply_markup=get_admin_keyboard())
         elif text == "🏠 প্রধান মেনু":
             return await update.message.reply_text("🏠 প্রধান মেনু:", reply_markup=get_user_keyboard())
@@ -618,10 +609,10 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         profile_text = (
             f"👤 **ইউজার প্রোফাইল**\n───────────────────\n"
             f"🆔 আইডি: `{str_id}`\n"
-            f"💰 কয়েন ব্যালেন্স: {u_data['credit']}\n"
+            f"💰 কয়েন ব্যালেন্স: {u_data['credit']}\n"
             f"📁 প্রজেক্ট সংখ্যা: {len(u_data['projects'])}\n"
             f"👥 মোট রেফার: {u_data['ref_count']}\n"
-            f"🎁 রেফার আয়: {u_data['ref_credit']} কয়েন"
+            f"🎁 রেফার আয়: {u_data['ref_credit']} কয়েন"
         )
         await update.message.reply_text(profile_text)
 
@@ -633,14 +624,14 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             u_data["credit"] += 25
             u_data["last_daily_bonus"] = today
             save_data(db)
-            await update.message.reply_text(f"🎉 **দৈনিক বোনাস সফল!**\n\nআপনি ২৫ কয়েন ফ্রি পেয়েছেন।")
+            await update.message.reply_text(f"🎉 **দৈনিক বোনাস সফল!**\n\nআপনি ২৫ কয়েন ফ্রি পেয়েছেন।")
 
     elif text in ["💰 রিচার্জ করুন", "🌟 পরিকল্পনা এবং ভারসাম্য"]:
         clean_admin = ADMIN_USERNAME.replace("@", "")
-        inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 কয়েন কিনতে অ্যাডমিনকে মেসেজ দিন", url=f"https://t.me/{clean_admin}")]])
+        inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 কয়েন কিনতে অ্যাডমিনকে মেসেজ দিন", url=f"https://t.me/{clean_admin}")]])
         await update.message.reply_text(
-            f"💎 **আপনার ব্যালেন্স:** {u_data['credit']} কয়েন\n\n"
-            f"💳 কয়েন রিচার্জ করতে নিচের বাটনে চাপ দিয়ে যোগাযোগ করুন:",
+            f"💎 **আপনার ব্যালেন্স:** {u_data['credit']} কয়েন\n\n"
+            f"💳 কয়েন রিচার্জ করতে নিচের বাটনে চাপ দিয়ে যোগাযোগ করুন:",
             reply_markup=inline_kb
         )
 
@@ -651,7 +642,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "🆘 সহায়তা":
         clean_admin = ADMIN_USERNAME.replace("@", "")
         inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 অ্যাডমিনকে মেসেজ দিন", url=f"https://t.me/{clean_admin}")]])
-        await update.message.reply_text("🆘 যেকোনো সহায়তার জন্য যোগাযোগ করুন:", reply_markup=inline_kb)
+        await update.message.reply_text("🆘 যেকোনো সহায়তার জন্য যোগাযোগ করুন:", reply_markup=inline_kb)
 
     elif text == "📁 আমার প্রকল্প":
         projects = u_data.get('projects', [])
@@ -665,7 +656,16 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 if __name__ == '__main__':
     keep_alive()
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    
+    # ⚡ নেটওয়ার্ক টাইমআউট সমাধান
+    app = (
+        ApplicationBuilder()
+        .token(BOT_TOKEN)
+        .read_timeout(30)
+        .connect_timeout(30)
+        .get_updates_read_timeout(30)
+        .build()
+    )
 
     conv_handler = ConversationHandler(
         entry_points=[
@@ -696,10 +696,9 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('admin', admin_panel_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
     
-    # 📢 চ্যানেলের অল পোস্ট ফিল্টার (নতুন ও এডিটেড দুই পোস্টই রিড করবে)
-    app.add_handler(MessageHandler(filters.CHAT & (filters.UpdateType.CHANNEL_POST | filters.UpdateType.EDITED_CHANNEL_POST), auto_react_channel_post))
+    # 📢 চ্যানেলের পোস্ট ফিল্টার (সঠিক টাইপ)
+    app.add_handler(MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post))
 
     logger.info("🤖 SMM Reaction Bot Engine Active...")
     
-    # 🌟 টেলিগ্রামকে চ্যানেল পোস্টের আপডেট পেতে বাধ্য করা
     app.run_polling(allowed_updates=["message", "edited_message", "channel_post", "edited_channel_post", "callback_query"])
