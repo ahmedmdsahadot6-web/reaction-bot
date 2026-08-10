@@ -51,6 +51,9 @@ BOT_USERNAME = "@Sahadot_reaction123_bot"
 ADMIN_IDS = [8454401183, 7871224176]
 ADMIN_USERNAME = "@SOYABUR_AS_LEADER"
 
+# 📢 Order Logs Channel
+LOG_CHANNEL = "@vucctx"
+
 # 🌐 Default SMM Panel Config
 SMM_API_URL = "https://1xpanel.com/api/v2"
 
@@ -127,7 +130,7 @@ def db_get_setting(key, default_val=""):
 def db_set_setting(key, value):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (k, str(value)))
     conn.commit()
     conn.close()
 
@@ -857,10 +860,12 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             db_save_user(uinfo)
             db_add_order(uid, order_id, ch_name, reaction_count, post_link)
 
+            # Send order completed log message directly to LOG_CHANNEL (@vucctx) instead of user PM
             try:
                 await context.bot.send_message(
-                    chat_id=user_chat_id,
+                    chat_id=LOG_CHANNEL,
                     text=f"🚀 **অটো রিয়্যাকশন অর্ডার সফল হয়েছে!**\n\n"
+                         f"👤 **ইউজার আইডি:** `{uid}`\n"
                          f"📢 **চ্যানেল:** {ch_name}\n"
                          f"🆔 **SMM অর্ডার আইডি:** `{order_id}`\n"
                          f"✨ **রিয়্যাকশন:** {reaction_count}\n"
@@ -869,9 +874,9 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                          f"📌 **পোস্ট লিংক:** {post_link}",
                     reply_markup=post_btn
                 )
-                logger.info(f"✅ SMM Order #{order_id} Success for User {uid}")
+                logger.info(f"✅ SMM Order #{order_id} posted to {LOG_CHANNEL}")
             except Exception as e:
-                logger.error(f"Failed to send order success alert to user {uid}: {e}")
+                logger.error(f"Failed to send order success alert to {LOG_CHANNEL}: {e}")
         else:
             err_msg = smm_res.get("error") or smm_res.get("message") or "SMM Server Response Error"
             try:
