@@ -80,6 +80,18 @@ def init_db():
             is_blocked INTEGER DEFAULT 0
         )
     ''')
+    # Orders table (Completed Orders)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            order_id TEXT,
+            channel_name TEXT,
+            count INTEGER,
+            post_link TEXT,
+            created_at TEXT
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -156,6 +168,28 @@ def db_get_all_users():
             "is_blocked": r[5]
         }
     return users
+
+def db_add_order(user_id, order_id, channel_name, count, post_link):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute('''
+        INSERT INTO orders (user_id, order_id, channel_name, count, post_link, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (str(user_id), str(order_id), channel_name, count, post_link, now_str))
+    conn.commit()
+    conn.close()
+
+def db_get_user_orders(user_id, limit=10):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT order_id, channel_name, count, post_link, created_at
+        FROM orders WHERE user_id = ? ORDER BY id DESC LIMIT ?
+    ''', (str(user_id), limit))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
 
 # States
 (STEP_CHANNEL, STEP_DISTRIBUTION, STEP_SPEED, STEP_COUNT, STEP_VIEWS, 
@@ -653,6 +687,26 @@ async def show_my_projects(message_obj, user_id):
         )
         await message_obj.reply_text(p_text, reply_markup=InlineKeyboardMarkup(kb))
 
+# 📋 Display Completed Orders List
+async def show_order_list(message_obj, user_id):
+    orders = db_get_user_orders(user_id)
+    if not orders:
+        await message_obj.reply_text("📋 **Order List**\n───────────────────\n❌ No completed orders found.")
+        return
+
+    text = "📋 **Completed Order List**\n───────────────────\n\n"
+    for o in orders:
+        order_id, channel_name, count, post_link, created_at = o
+        text += (
+            f"🆔 **Order ID:** `{order_id}`\n"
+            f"📢 **Channel:** {channel_name}\n"
+            f"✨ **Reactions:** {count}\n"
+            f"📅 **Date:** {created_at}\n"
+            f"🔗 **Post:** [View Post]({post_link})\n"
+            f"───────────────\n"
+        )
+    await message_obj.reply_text(text, disable_web_page_preview=True)
+
 # 🚀 Core Auto-Reaction Post Monitor
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.channel_post or update.edited_channel_post
@@ -720,6 +774,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             order_id = smm_res["order"]
             uinfo["credit"] -= reaction_count
             db_save_user(uinfo)
+            db_add_order(uid, order_id, ch_name, reaction_count, post_link)
 
             try:
                 await context.bot.send_message(
@@ -853,7 +908,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif text == "📋 Order List":
-        await show_my_projects(update.message, str_id)
+        await show_order_list(update.message, str_id)
 
     elif text in ["🎧 Support", "Support"]:
         inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 Contact Support", url="https://t.me/ARIYAN_VAI_BOSS")]])
