@@ -103,13 +103,28 @@ def init_db():
             value TEXT
         )
     ''')
+    # Pending Deposits Table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS pending_deposits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            tx_id TEXT,
+            amount_usdt REAL,
+            coins INTEGER,
+            status TEXT DEFAULT 'PENDING',
+            created_at TEXT
+        )
+    ''')
     
     # Default Settings Setup
     defaults = {
         "smm_api_key": "792d092f1f7fdcebcb9233107b2f1f33",
         "smm_service_id": "1936",
         "coin_rate": "1",          # 1 coin = 1 reaction
-        "referral_bonus": "100"    # 100 coins per referral
+        "referral_bonus": "100",   # 100 coins per referral
+        "binance_pay_id": "839892941",
+        "usdt_coin_rate": "1000",  # $1 USDT = 1000 Coins
+        "min_deposit_usdt": "1"    # Min $1 USDT
     }
     for k, v in defaults.items():
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v))
@@ -228,10 +243,39 @@ def db_get_user_orders(user_id, limit=10):
     conn.close()
     return rows
 
+def db_add_deposit_request(user_id, tx_id, amount_usdt, coins):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute('''
+        INSERT INTO pending_deposits (user_id, tx_id, amount_usdt, coins, status, created_at)
+        VALUES (?, ?, ?, ?, 'PENDING', ?)
+    ''', (str(user_id), tx_id, amount_usdt, coins, now_str))
+    dep_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return dep_id
+
+def db_get_deposit_request(dep_id):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, tx_id, amount_usdt, coins, status FROM pending_deposits WHERE id = ?", (dep_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row
+
+def db_update_deposit_status(dep_id, status):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE pending_deposits SET status = ? WHERE id = ?", (status, dep_id))
+    conn.commit()
+    conn.close()
+
 # States
 (STEP_CHANNEL, STEP_DISTRIBUTION, STEP_SPEED, STEP_COUNT, STEP_VIEWS, 
  STEP_REVIEW, STEP_EDIT_FIELD, STEP_EDIT_VALUE,
- STEP_ADMIN_SEARCH_USER, STEP_ADMIN_BROADCAST, STEP_ADMIN_EDIT_SETTING) = range(11)
+ STEP_ADMIN_SEARCH_USER, STEP_ADMIN_BROADCAST, STEP_ADMIN_EDIT_SETTING,
+ STEP_DEPOSIT_AMOUNT, STEP_DEPOSIT_TXID) = range(13)
 
 # 🛒 SMM Order Submit Function
 def send_smm_order(link, quantity):
@@ -291,9 +335,7 @@ def get_admin_dashboard_keyboard():
     return ReplyKeyboardMarkup([
         [KeyboardButton("🤖 Bot Orders"), KeyboardButton("🌐 API Orders")],
         [KeyboardButton("💳 Panel Balance"), KeyboardButton("📋 All Orders")],
-        [KeyboardButton("💰 Telegram Super Service"), KeyboardButton("🧪 Services")],
-        [KeyboardButton("🔄 Replace OFF ❌"), KeyboardButton("♻️ Refill OFF ❌")],
-        [KeyboardButton("❌ Canceled"), KeyboardButton("⚠️ Failed/Partial")],
+        [KeyboardButton("💰 Binance Settings"), KeyboardButton("🧪 Services")],
         [KeyboardButton("💡 Coin Rate Settings"), KeyboardButton("👥 Referral Settings")],
         [KeyboardButton("🏠 Main Menu")]
     ], resize_keyboard=True)
@@ -360,8 +402,7 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = db_get_user(user_id)
 
     if u_data['credit'] <= 0:
-        clean_admin = ADMIN_USERNAME.replace("@", "")
-        inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 Contact Admin", url=f"https://t.me/{clean_admin}")]])
+        inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💰 Top-up Now", callback_data="btn_start_topup")]])
         await update.message.reply_text("⚠️ আপনার পর্যাপ্ত কয়েন নেই!\nনতুন প্রজেক্ট তৈরি করতে দয়া করে রিচার্জ করুন।", reply_markup=inline_kb)
         return ConversationHandler.END
 
@@ -613,12 +654,190 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('draft_project', None)
     context.user_data.pop('edit_target', None)
     context.user_data.pop('admin_edit_key', None)
+    context.user_data.pop('deposit_data', None)
     msg_text = "প্রসেস বাতিল করা হয়েছে।"
     if update.callback_query:
         await update.callback_query.message.reply_text(msg_text, reply_markup=get_user_keyboard())
     else:
         await update.message.reply_text(msg_text, reply_markup=get_user_keyboard())
     return ConversationHandler.END
+
+# 💳 --- BINANCE PAY TOP-UP SYSTEM --- 💳
+async def start_topup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query:
+        await query.answer()
+
+    pay_id = db_get_setting("binance_pay_id", "839892941")
+    coin_rate = db_get_setting("usdt_coin_rate", "1000")
+    min_usdt = db_get_setting("min_deposit_usdt", "1")
+
+    text = (
+        f"💳 **Binance Pay (USDT) Top-up**\n"
+        f"───────────────────\n"
+        f"🆔 **Binance Pay ID:** `{pay_id}`\n"
+        f"💎 **রেট:** `$1 USDT = {coin_rate} Coins`\n"
+        f"⚠️ **সর্বনিম্ন ডিপোজিট:** `${min_usdt} USDT`\n\n"
+        f"✍️ **কত USDT ডিপোজিট করতে চান? সংখ্যাটি লিখে পাঠান:**\n"
+        f"(উদাহরণ: `1`, `5`, `10`)"
+    )
+    
+    if query:
+        await query.message.reply_text(text, reply_markup=cancel_keyboard())
+    else:
+        await update.message.reply_text(text, reply_markup=cancel_keyboard())
+        
+    return STEP_DEPOSIT_AMOUNT
+
+async def process_deposit_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = update.message.text.strip()
+    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+        await update.message.reply_text("টপ-আপ বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
+        return ConversationHandler.END
+
+    try:
+        amount_usdt = float(txt)
+        min_usdt = float(db_get_setting("min_deposit_usdt", "1"))
+        if amount_usdt < min_usdt:
+            await update.message.reply_text(f"❌ সর্বনিম্ন `${min_usdt} USDT` ডিপোজিট করতে হবে! আবার লিখুন:")
+            return STEP_DEPOSIT_AMOUNT
+    except ValueError:
+        await update.message.reply_text("❌ দয়া করে সঠিক সংখ্যা লিখুন! (যেমন: 1, 5, 10):")
+        return STEP_DEPOSIT_AMOUNT
+
+    usdt_rate = float(db_get_setting("usdt_coin_rate", "1000"))
+    coins = int(amount_usdt * usdt_rate)
+    pay_id = db_get_setting("binance_pay_id", "839892941")
+
+    context.user_data['deposit_data'] = {
+        'amount_usdt': amount_usdt,
+        'coins': coins
+    }
+
+    text = (
+        f"📲 **পেমেন্ট নির্দেশিকা:**\n"
+        f"───────────────────\n"
+        f"১) আপনার বাইনান্স অ্যাপ ওপেন করুন ➔ Binance Pay\n"
+        f"২) Send অপশনে গিয়ে Pay ID: `{pay_id}` ব্যবহার করুন।\n"
+        f"৩) **${amount_usdt} USDT** সেন্ড করুন।\n\n"
+        f"🎁 পেমেন্ট শেষে প্রাপ্ত **Binance Transaction ID (TxID)** এখানে পাঠিয়া দিন:"
+    )
+    await update.message.reply_text(text, reply_markup=cancel_keyboard())
+    return STEP_DEPOSIT_TXID
+
+async def process_deposit_txid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = update.message.text.strip()
+    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+        context.user_data.pop('deposit_data', None)
+        await update.message.reply_text("টপ-আপ বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
+        return ConversationHandler.END
+
+    dep_info = context.user_data.get('deposit_data')
+    if not dep_info:
+        await update.message.reply_text("❌ কোনো তথ্য পাওয়া যায়নি! আবার চেষ্টা করুন।", reply_markup=get_user_keyboard())
+        return ConversationHandler.END
+
+    user = update.effective_user
+    user_id = str(user.id)
+    tx_id = txt
+    amount_usdt = dep_info['amount_usdt']
+    coins = dep_info['coins']
+
+    dep_id = db_add_deposit_request(user_id, tx_id, amount_usdt, coins)
+    context.user_data.pop('deposit_data', None)
+
+    await update.message.reply_text(
+        f"✅ **আপনার ডিপোজিট রিকোয়েস্ট জমা হয়েছে!**\n\n"
+        f"🆔 **Transaction ID:** `{tx_id}`\n"
+        f"💵 **পরিমাণ:** `${amount_usdt} USDT` ({coins} Coins)\n\n"
+        f"অ্যাডমিন ভেরিফাই করার পর অতি শীঘ্রই আপনার অ্যাকাউন্টে কয়েন যোগ করে দেওয়া হবে।",
+        reply_markup=get_user_keyboard()
+    )
+
+    # Send Notification to Admins
+    admin_btn = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Approve", callback_data=f"dep_approve_{dep_id}"),
+            InlineKeyboardButton("❌ Reject", callback_data=f"dep_reject_{dep_id}")
+        ]
+    ])
+
+    admin_msg = (
+        f"📥 **NEW BINANCE DEPOSIT REQUEST**\n"
+        f"───────────────────\n"
+        f"👤 **User:** {user.first_name} (`{user_id}`)\n"
+        f"💵 **Amount:** `${amount_usdt} USDT`\n"
+        f"💎 **Coins:** `{coins}` Coins\n"
+        f"🆔 **TxID:** `{tx_id}`\n"
+        f"📅 **Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+
+    for admin_id in ADMIN_IDS:
+        try:
+            await context.bot.send_message(chat_id=admin_id, text=admin_msg, reply_markup=admin_btn)
+        except Exception as e:
+            logger.error(f"Failed to send deposit alert to admin {admin_id}: {e}")
+
+    return ConversationHandler.END
+
+# Admin Deposit Approval Handler
+async def handle_admin_deposit_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    parts = data.split("_")
+    action, dep_id = parts[1], int(parts[2])
+
+    dep_data = db_get_deposit_request(dep_id)
+    if not dep_data:
+        await query.message.reply_text("❌ ডিপোজিট রিকোয়েস্ট পাওয়া যায়নি!")
+        return
+
+    user_id, tx_id, amount_usdt, coins, status = dep_data
+
+    if status != "PENDING":
+        await query.message.reply_text(f"⚠️ এই রিকোয়েস্টটি আগেই **{status}** করা হয়েছে!")
+        return
+
+    if action == "approve":
+        db_update_deposit_status(dep_id, "APPROVED")
+        u_data = db_get_user(user_id)
+        u_data['credit'] += coins
+        db_save_user(u_data)
+
+        await query.edit_message_text(
+            f"{query.message.text}\n\n"
+            f"✅ **APPROVED by Admin** ({query.from_user.first_name})"
+        )
+
+        try:
+            await context.bot.send_message(
+                chat_id=int(user_id),
+                text=f"🎉 **ডিপোজিট সফল হয়েছে!**\n\n"
+                     f"আপনার অ্যাকাউন্টে **{coins} Coins** যোগ করা হয়েছে।\n"
+                     f"💰 **বর্তমান ব্যালেন্স:** {u_data['credit']} Coins"
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify user about approval: {e}")
+
+    elif action == "reject":
+        db_update_deposit_status(dep_id, "REJECTED")
+
+        await query.edit_message_text(
+            f"{query.message.text}\n\n"
+            f"❌ **REJECTED by Admin** ({query.from_user.first_name})"
+        )
+
+        try:
+            await context.bot.send_message(
+                chat_id=int(user_id),
+                text=f"❌ **আপনার ডিপোজিট রিকোয়েস্টটি বাতিল করা হয়েছে!**\n\n"
+                     f"TxID: `{tx_id}`\n"
+                     f"যেকোনো তথ্যের জন্য সাপোর্টে যোগাযোগ করুন।"
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify user about rejection: {e}")
 
 # 🛠️ Project Action Callback
 async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -825,7 +1044,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
         ch_name = proj.get("channel_name", "Channel")
         reaction_count = proj.get("count", 100)
         
-        # Calculate needed coins based on rate
         needed_coins = int(reaction_count * coin_rate)
 
         if chat_username:
@@ -859,10 +1077,8 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             db_save_user(uinfo)
             db_add_order(uid, order_id, ch_name, reaction_count, post_link)
 
-            # SMM রেসপন্স থেকে স্ট্যাটাস গ্রহণ
             status = smm_res.get("status", "PENDING").upper()
 
-            # সংক্ষিপ্ত লগ মেসেজ ফরম্যাট
             log_text = (
                 f"ORDER UPDATE\n"
                 f"#{order_id}\n"
@@ -878,20 +1094,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                 logger.info(f"✅ SMM Order #{order_id} posted to {LOG_CHANNEL}")
             except Exception as e:
                 logger.error(f"Failed to send order update to {LOG_CHANNEL}: {e}")
-        else:
-            err_msg = smm_res.get("error") or smm_res.get("message") or "SMM Server Response Error"
-            post_btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔗 View Post", url=post_link)]])
-            try:
-                await context.bot.send_message(
-                    chat_id=user_chat_id,
-                    text=f"❌ **অর্ডার প্রদান ব্যর্থ হয়েছে!**\n\n"
-                         f"📢 **চ্যানেল:** {ch_name}\n"
-                         f"⚠️ **কারণ:** `{err_msg}`\n\n"
-                         f"📌 **পোস্ট লিংক:** {post_link}",
-                    reply_markup=post_btn
-                )
-            except Exception as e:
-                logger.error(f"Failed to send order fail alert: {e}")
 
 # 👑 Admin Handlers
 async def start_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -959,8 +1161,11 @@ async def admin_settings_edit_callback(update: Update, context: ContextTypes.DEF
         prompts = {
             "smm_api_key": "🔑 **নতুন SMM Panel API Key পাঠান:**",
             "smm_service_id": "🧪 **নতুন SMM Service ID পাঠান:**",
-            "coin_rate": "💡 **নতুন Coin Rate লিখুন:**\n(যেমন: `1` মানে ১ কয়েন = ১টি রিয়েকশন, `0.5` মানে ১ কয়েন = ২টি রিয়েকশন)",
-            "referral_bonus": "👥 **রেফারেল বোনাসের নতুন Coins সংখ্যা লিখুন:**\n(যেমন: `100`, `200`)"
+            "coin_rate": "💡 **নতুন Coin Rate লিখুন:**\n(যেমন: `1` মানে ১ কয়েন = ১টি রিয়্যাকশন, `0.5` মানে ১ কয়েন = ২টি রিয়্যাকশন)",
+            "referral_bonus": "👥 **রেফারেল বোনাসের নতুন Coins সংখ্যা লিখুন:**\n(যেমন: `100`, `200`)",
+            "binance_pay_id": "💳 **নতুন Binance Pay ID লিখুন:**",
+            "usdt_coin_rate": "💎 **১ USDT তে কত Coins হবে লিখুন:**\n(যেমন: `1000`)",
+            "min_deposit_usdt": "⚠️ **সর্বনিম্ন ডিপোজিট USDT লিমিট লিখুন:**\n(যেমন: `1`)"
         }
         await query.message.reply_text(prompts.get(key, "✍️ নতুন মান লিখে পাঠান:"), reply_markup=cancel_keyboard())
         return STEP_ADMIN_EDIT_SETTING
@@ -1009,6 +1214,24 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text == "📊 Admin Dashboard":
             return await update.message.reply_text("📊 **অ্যাডমিন ড্যাশবোর্ড সেটিংস:**", reply_markup=get_admin_dashboard_keyboard())
         
+        elif text == "💰 Binance Settings":
+            pay_id = db_get_setting("binance_pay_id", "839892941")
+            rate = db_get_setting("usdt_coin_rate", "1000")
+            min_dep = db_get_setting("min_deposit_usdt", "1")
+
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("✏️ Binance Pay ID", callback_data="edit_setting_binance_pay_id")],
+                [InlineKeyboardButton("✏️ Coin Rate ($1 USDT)", callback_data="edit_setting_usdt_coin_rate")],
+                [InlineKeyboardButton("✏️ Min Deposit Limit", callback_data="edit_setting_min_deposit_usdt")]
+            ])
+            return await update.message.reply_text(
+                f"💳 **Binance Settings:**\n───────────────────\n"
+                f"🆔 Binance Pay ID: `{pay_id}`\n"
+                f"💎 $1 USDT = `{rate}` Coins\n"
+                f"⚠️ Min Deposit: `${min_dep}` USDT",
+                reply_markup=kb
+            )
+
         elif text == "🌐 API Orders":
             curr_key = db_get_setting("smm_api_key", "792d092f1f7fdcebcb9233107b2f1f33")
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("✏️ Edit API Key", callback_data="edit_setting_smm_api_key")]])
@@ -1057,9 +1280,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=kb
             )
 
-        elif text in ["🤖 Bot Orders", "📋 All Orders", "💰 Telegram Super Service", 
-                      "🔄 Replace OFF ❌", "♻️ Refill OFF ❌", "❌ Canceled", 
-                      "⚠️ Failed/Partial"]:
+        elif text in ["🤖 Bot Orders", "📋 All Orders"]:
             return await update.message.reply_text(f"⚙️ **{text}** অপশনটি সিলেক্ট করা হয়েছে।", reply_markup=get_admin_dashboard_keyboard())
 
         elif text == "👥 Users Report":
@@ -1087,16 +1308,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "🛠️ Settings":
         await show_my_projects(update.message, str_id)
 
-    elif text == "💰 Top-up":
-        clean_admin = ADMIN_USERNAME.replace("@", "")
-        inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 Contact Admin to Buy Coins", url=f"https://t.me/{clean_admin}")]])
-        await update.message.reply_text(
-            f"💎 **আপনার ব্যালেন্স:** {u_data['credit']} coins\n\n"
-            f"💳 কয়েন টপ-আপ বা রিচার্জ করতে নিচের বাটনে ক্লিক করুন:",
-            reply_markup=inline_kb
-        )
-
-    elif text == "📋 Order List":
+    elif text in ["📋 Order List"]:
         await show_order_list(update.message, str_id)
 
     elif text in ["🎧 Support", "Support"]:
@@ -1130,6 +1342,8 @@ if __name__ == '__main__':
     conv_handler = ConversationHandler(
         entry_points=[
             MessageHandler(filters.Regex("^⚙️ Setup$"), start_project),
+            MessageHandler(filters.Regex("^💰 Top-up$"), start_topup_flow),
+            CallbackQueryHandler(start_topup_flow, pattern="^btn_start_topup$"),
             MessageHandler(filters.Regex("^👤 Search User$"), start_search_user),
             MessageHandler(filters.Regex("^📢 Send SMS$"), start_broadcast),
             CallbackQueryHandler(project_action_callback, pattern="^(fe_|p_)"),
@@ -1148,7 +1362,9 @@ if __name__ == '__main__':
             STEP_EDIT_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_value)],
             STEP_ADMIN_SEARCH_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_search_user)],
             STEP_ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_broadcast)],
-            STEP_ADMIN_EDIT_SETTING: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_edit_setting)]
+            STEP_ADMIN_EDIT_SETTING: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_edit_setting)],
+            STEP_DEPOSIT_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_deposit_amount)],
+            STEP_DEPOSIT_TXID: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_deposit_txid)]
         },
         fallbacks=[
             CommandHandler('start', start), 
@@ -1161,6 +1377,7 @@ if __name__ == '__main__':
     
     app.add_handler(channel_handler)
     app.add_handler(conv_handler)
+    app.add_handler(CallbackQueryHandler(handle_admin_deposit_action, pattern="^dep_"))
     app.add_handler(CallbackQueryHandler(project_action_callback, pattern="^(p_|fe_)"))
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
