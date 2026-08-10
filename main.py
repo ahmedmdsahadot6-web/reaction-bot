@@ -46,13 +46,13 @@ def keep_alive():
     t_ping.start()
 
 # 🔑 Configuration
-BOT_TOKEN = "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw"
-BOT_USERNAME = "@Sahadot_reaction123_bot"
+BOT_TOKEN = "8320025447:AAFWnP_asWXs6WXS-h_gPAy6Baikd6-4jMc"
+BOT_USERNAME = "@TGSUPER_SERVICE_BOT"
 ADMIN_IDS = [8454401183, 7871224176]
 ADMIN_USERNAME = "@SOYABUR_AS_LEADER"
 
 # 📢 Order Logs Channel
-LOG_CHANNEL = "@vucctx"
+LOG_CHANNEL = "@orderchannelsuperfast"
 
 # 🌐 Default SMM Panel Config
 SMM_API_URL = "https://1xpanel.com/api/v2"
@@ -96,6 +96,18 @@ def init_db():
             created_at TEXT
         )
     ''')
+    # Top-up Requests Table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS topup_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            txid TEXT,
+            photo_id TEXT,
+            amount INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'PENDING',
+            created_at TEXT
+        )
+    ''')
     # Settings table for Admin Configuration
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS settings (
@@ -109,7 +121,7 @@ def init_db():
         "smm_api_key": "792d092f1f7fdcebcb9233107b2f1f33",
         "smm_service_id": "1936",
         "coin_rate": "1",          # 1 coin = 1 reaction
-        "dollar_rate": "1000",      # $1 = 1000 coins (Defines Dollar Rate)
+        "dollar_rate": "1000",     # $1 = 1000 coins
         "referral_bonus": "100"    # 100 coins per referral
     }
     for k, v in defaults.items():
@@ -131,7 +143,7 @@ def db_get_setting(key, default_val=""):
 def db_set_setting(key, value):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (k, str(value)))
     conn.commit()
     conn.close()
 
@@ -229,10 +241,54 @@ def db_get_user_orders(user_id, limit=10):
     conn.close()
     return rows
 
+# Topup DB Helpers
+def db_add_topup_request(user_id, txid, photo_id, amount):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute('''
+        INSERT INTO topup_requests (user_id, txid, photo_id, amount, status, created_at)
+        VALUES (?, ?, ?, ?, 'PENDING', ?)
+    ''', (str(user_id), str(txid), str(photo_id), int(amount), now_str))
+    conn.commit()
+    req_id = cursor.lastrowid
+    conn.close()
+    return req_id
+
+def db_get_pending_topups():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT id, user_id, txid, photo_id, amount, created_at
+        FROM topup_requests WHERE status = 'PENDING' ORDER BY id ASC
+    ''')
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+def db_get_topup_by_id(req_id):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT id, user_id, txid, photo_id, amount, status, created_at
+        FROM topup_requests WHERE id = ?
+    ''', (req_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row
+
+def db_update_topup_status(req_id, status):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE topup_requests SET status = ? WHERE id = ?', (status, req_id))
+    conn.commit()
+    conn.close()
+
 # States
 (STEP_CHANNEL, STEP_DISTRIBUTION, STEP_SPEED, STEP_COUNT, STEP_VIEWS, 
  STEP_REVIEW, STEP_EDIT_FIELD, STEP_EDIT_VALUE,
- STEP_ADMIN_SEARCH_USER, STEP_ADMIN_BROADCAST, STEP_ADMIN_EDIT_SETTING) = range(11)
+ STEP_ADMIN_SEARCH_USER, STEP_ADMIN_BROADCAST, STEP_ADMIN_EDIT_SETTING,
+ STEP_TOPUP_AMOUNT, STEP_TOPUP_TXID, STEP_TOPUP_PHOTO) = range(14)
 
 # 🛒 SMM Order Submit Function
 def send_smm_order(link, quantity):
@@ -614,12 +670,182 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('draft_project', None)
     context.user_data.pop('edit_target', None)
     context.user_data.pop('admin_edit_key', None)
+    context.user_data.pop('topup_data', None)
     msg_text = "প্রসেস বাতিল করা হয়েছে।"
     if update.callback_query:
         await update.callback_query.message.reply_text(msg_text, reply_markup=get_user_keyboard())
     else:
         await update.message.reply_text(msg_text, reply_markup=get_user_keyboard())
     return ConversationHandler.END
+
+# 💰 Top-up Flow Logic (Updated for Dollar Rate)
+async def start_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    u_data = db_get_user(user_id)
+    clean_admin = ADMIN_USERNAME.replace("@", "")
+    
+    dollar_rate = db_get_setting("dollar_rate", "1000")
+    context.user_data['topup_data'] = {}
+    
+    text = (
+        f"💎 **আপনার বর্তমান ব্যালেন্স:** {u_data['credit']} coins\n"
+        f"💵 **রেট:** $1 = {dollar_rate} Coins\n\n"
+        f"💳 **টপ-আপ করার নিয়ম:**\n"
+        f"১) এডমিনের সাথে কথা বলে পেমেন্ট করুন: @{clean_admin}\n"
+        f"২) পেমেন্ট শেষে নিচে আবেদনের তথ্য জমা দিন।\n\n"
+        f"👉 **ধাপ ১:** কত ডলার ডিপোজিট করতে চান তা লিখুন (যেমন: `1`, `5`, `10`):"
+    )
+    await update.message.reply_text(text, reply_markup=cancel_keyboard())
+    return STEP_TOPUP_AMOUNT
+
+async def save_topup_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = update.message.text.strip()
+    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+        context.user_data.pop('topup_data', None)
+        await update.message.reply_text("টপ-আপ প্রসেস বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
+        return ConversationHandler.END
+        
+    try:
+        usd_val = float(txt)
+        if usd_val <= 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("❌ অকার্যকর পরিমাণ! শুধুমাত্র সঠিক সংখ্যা লিখুন (যেমন: 1, 5, 10):")
+        return STEP_TOPUP_AMOUNT
+
+    dollar_rate = float(db_get_setting("dollar_rate", "1000"))
+    calc_coins = int(usd_val * dollar_rate)
+
+    context.user_data['topup_data']['usd_amount'] = usd_val
+    context.user_data['topup_data']['amount'] = calc_coins
+
+    await update.message.reply_text(
+        f"💰 **আপনার ডিপোজিট:** ${usd_val} = **{calc_coins} Coins**\n\n"
+        f"👉 **ধাপ ২:** আপনার পেমেন্টের **Transaction ID (TxID)** টি লিখে পাঠান:",
+        reply_markup=cancel_keyboard()
+    )
+    return STEP_TOPUP_TXID
+
+async def save_topup_txid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = update.message.text.strip()
+    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+        context.user_data.pop('topup_data', None)
+        await update.message.reply_text("টপ-আপ প্রসেস বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
+        return ConversationHandler.END
+
+    if len(txt) < 3:
+        await update.message.reply_text("❌ সঠিক Transaction ID (TxID) লিখুন:")
+        return STEP_TOPUP_TXID
+
+    context.user_data['topup_data']['txid'] = txt
+    await update.message.reply_text(
+        f"👉 **ধাপ ৩:** আপনার পেমেন্টের **স্ক্রিনশট (Photo)** টি পাঠান:",
+        reply_markup=cancel_keyboard()
+    )
+    return STEP_TOPUP_PHOTO
+
+async def save_topup_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    if msg.text and msg.text in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+        context.user_data.pop('topup_data', None)
+        await update.message.reply_text("টপ-আপ প্রসেস বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
+        return ConversationHandler.END
+
+    if not msg.photo:
+        await update.message.reply_text("❌ দয়া করে পেমেন্টের একটি স্ক্রিনশট (Photo) পাঠান:")
+        return STEP_TOPUP_PHOTO
+
+    photo_id = msg.photo[-1].file_id
+    user_id = update.effective_user.id
+    topup_info = context.user_data.get('topup_data', {})
+    amount = topup_info.get('amount', 0)
+    usd_amount = topup_info.get('usd_amount', 0)
+    txid = topup_info.get('txid', '')
+
+    req_id = db_add_topup_request(user_id, txid, photo_id, amount)
+    context.user_data.pop('topup_data', None)
+
+    await msg.reply_text(
+        f"🎉 **আপনার টপ-আপ আবেদন সফলভাবে জমা হয়েছে!**\n\n"
+        f"🆔 **আবেদন আইডি:** `#{req_id}`\n"
+        f"💵 **আমোউন্ট:** ${usd_amount} ({amount} Coins)\n"
+        f"💳 **TxID:** `{txid}`\n\n"
+        f"⏳ অ্যাডমিন যাচাই করে খুব শীঘ্রই আপনার ব্যালেন্স যোগ করে দেবে।",
+        reply_markup=get_user_keyboard()
+    )
+    return ConversationHandler.END
+
+# 💳 Top-up Approve / Reject Callback
+async def topup_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    if query.from_user.id not in ADMIN_IDS:
+        return
+
+    if data.startswith("topup_approve_"):
+        req_id = int(data.split("_")[2])
+        req = db_get_topup_by_id(req_id)
+        if not req:
+            await query.message.reply_text("❌ আবেদনটি পাওয়া যায়নি।")
+            return
+
+        rid, uid, txid, photo_id, amount, status, created_at = req
+        if status != 'PENDING':
+            await query.message.reply_text(f"⚠️ এই আবেদনটি ইতোমধ্যে {status} করা হয়েছে।")
+            return
+
+        db_update_topup_status(req_id, 'APPROVED')
+
+        u_data = db_get_user(uid)
+        u_data['credit'] += amount
+        db_save_user(u_data)
+
+        if query.message.caption:
+            await query.edit_message_caption(
+                caption=f"{query.message.caption}\n\n✅ **স্ট্যাটাস: APPROVED** (কয়েন যোগ করা হয়েছে: {amount})"
+            )
+
+        try:
+            await context.bot.send_message(
+                chat_id=int(uid),
+                text=f"🎉 **আপনার টপ-আপ আবেদন অনুমোদিত হয়েছে!**\n\n"
+                     f"💰 যোগকৃত কয়েন: {amount}\n"
+                     f"💳 বর্তমান ব্যালেন্স: {u_data['credit']} Coins\n"
+                     f"🆔 TxID: `{txid}`"
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify user for approved topup: {e}")
+
+    elif data.startswith("topup_reject_"):
+        req_id = int(data.split("_")[2])
+        req = db_get_topup_by_id(req_id)
+        if not req:
+            await query.message.reply_text("❌ আবেদনটি পাওয়া যায়নি।")
+            return
+
+        rid, uid, txid, photo_id, amount, status, created_at = req
+        if status != 'PENDING':
+            await query.message.reply_text(f"⚠️ এই আবেদনটি ইতোমধ্যে {status} করা হয়েছে।")
+            return
+
+        db_update_topup_status(req_id, 'REJECTED')
+
+        if query.message.caption:
+            await query.edit_message_caption(
+                caption=f"{query.message.caption}\n\n❌ **স্ট্যাটাস: REJECTED**"
+            )
+
+        try:
+            await context.bot.send_message(
+                chat_id=int(uid),
+                text=f"❌ **আপনার টপ-আপ আবেদন বাতিল করা হয়েছে!**\n\n"
+                     f"🆔 TxID: `{txid}`\n"
+                     f"প্রয়োজনে এডমিনের সাথে যোগাযোগ করুন।"
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify user for rejected topup: {e}")
 
 # 🛠️ Project Action Callback
 async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -826,7 +1052,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
         ch_name = proj.get("channel_name", "Channel")
         reaction_count = proj.get("count", 100)
         
-        # Calculate needed coins based on rate
         needed_coins = int(reaction_count * coin_rate)
 
         if chat_username:
@@ -861,7 +1086,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             db_save_user(uinfo)
             db_add_order(uid, order_id, ch_name, reaction_count, post_link)
 
-            # Send order completed log message directly to LOG_CHANNEL (@vucctx) instead of user PM
             try:
                 await context.bot.send_message(
                     chat_id=LOG_CHANNEL,
@@ -958,7 +1182,7 @@ async def admin_settings_edit_callback(update: Update, context: ContextTypes.DEF
         prompts = {
             "smm_api_key": "🔑 **নতুন SMM Panel API Key পাঠান:**",
             "smm_service_id": "🧪 **নতুন SMM Service ID পাঠান:**",
-            "coin_rate": "💡 **নতুন Coin Rate লিখুন:**\n(যেমন: `1` মানে ১ কয়েন = ১টি রিয়েকশন, `0.5` মানে ১ কয়েন = ২টি রিয়েকশন)",
+            "coin_rate": "💡 **নতুন Reaction Coin Rate লিখুন:**\n(যেমন: `1` মানে ১ কয়েন = ১টি রিয়েকশন, `0.5` মানে ১ কয়েন = ২টি রিয়েকশন)",
             "dollar_rate": "💵 **নতুন Dollar Rate ($1 = ? Coins) লিখুন:**\n(যেমন: `1000` মানে $1 = 1000 Coins)",
             "referral_bonus": "👥 **রেফারেল বোনাসের নতুন Coins সংখ্যা লিখুন:**\n(যেমন: `100`, `200`)"
         }
@@ -1009,6 +1233,35 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text == "📊 Admin Dashboard":
             return await update.message.reply_text("📊 **অ্যাডমিন ড্যাশবোর্ড সেটিংস:**", reply_markup=get_admin_dashboard_keyboard())
         
+        elif text == "📋 All Orders":
+            pending_topups = db_get_pending_topups()
+            if not pending_topups:
+                return await update.message.reply_text("📋 **সকল পেমেন্ট আবেদন**\n───────────────────\n❌ বর্তমানে কোনো পেন্ডিং টপ-আপ আবেদন নেই।", reply_markup=get_admin_dashboard_keyboard())
+            
+            await update.message.reply_text(f"📋 **মোট {len(pending_topups)} টি পেন্ডিং টপ-আপ আবেদন রয়েছে:**")
+            
+            for req in pending_topups:
+                rid, uid, txid, photo_id, amount, created_at = req
+                caption_text = (
+                    f"💳 **পেন্ডিং টপ-আপ আবেদন #{rid}**\n"
+                    f"───────────────────\n"
+                    f"👤 **ইউজার আইডি:** `{uid}`\n"
+                    f"💰 **আবেদনের কয়েন:** {amount}\n"
+                    f"🆔 **TxID:** `{txid}`\n"
+                    f"📅 **তারিখ:** {created_at}"
+                )
+                kb = InlineKeyboardMarkup([
+                    [
+                        InlineKeyboardButton("✅ Approve", callback_data=f"topup_approve_{rid}"),
+                        InlineKeyboardButton("❌ Reject", callback_data=f"topup_reject_{rid}")
+                    ]
+                ])
+                try:
+                    await update.message.reply_photo(photo=photo_id, caption=caption_text, reply_markup=kb)
+                except Exception as e:
+                    await update.message.reply_text(f"{caption_text}\n\n⚠️ ছবি দেখতে সমস্যা হচ্ছে।", reply_markup=kb)
+            return
+
         elif text == "🌐 API Orders":
             curr_key = db_get_setting("smm_api_key", "792d092f1f7fdcebcb9233107b2f1f33")
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("✏️ Edit API Key", callback_data="edit_setting_smm_api_key")]])
@@ -1040,6 +1293,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif text == "💡 Coin Rate Settings":
             curr_rate = db_get_setting("coin_rate", "1")
             curr_dollar = db_get_setting("dollar_rate", "1000")
+            
             kb = InlineKeyboardMarkup([
                 [InlineKeyboardButton("✏️ Edit Reaction Coin Rate", callback_data="edit_setting_coin_rate")],
                 [InlineKeyboardButton("✏️ Edit Dollar Rate ($1 = ? Coins)", callback_data="edit_setting_dollar_rate")]
@@ -1062,7 +1316,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=kb
             )
 
-        elif text in ["🤖 Bot Orders", "📋 All Orders", "💰 Telegram Super Service", 
+        elif text in ["🤖 Bot Orders", "💰 Telegram Super Service", 
                       "🔄 Replace OFF ❌", "♻️ Refill OFF ❌", "❌ Canceled", 
                       "⚠️ Failed/Partial"]:
             return await update.message.reply_text(f"⚙️ **{text}** অপশনটি সিলেক্ট করা হয়েছে।", reply_markup=get_admin_dashboard_keyboard())
@@ -1091,15 +1345,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif text == "🛠️ Settings":
         await show_my_projects(update.message, str_id)
-
-    elif text == "💰 Top-up":
-        clean_admin = ADMIN_USERNAME.replace("@", "")
-        inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 Contact Admin to Buy Coins", url=f"https://t.me/{clean_admin}")]])
-        await update.message.reply_text(
-            f"💎 **আপনার ব্যালেন্স:** {u_data['credit']} coins\n\n"
-            f"💳 কয়েন টপ-আপ বা রিচার্জ করতে নিচের বাটনে ক্লিক করুন:",
-            reply_markup=inline_kb
-        )
 
     elif text == "📋 Order List":
         await show_order_list(update.message, str_id)
@@ -1135,6 +1380,7 @@ if __name__ == '__main__':
     conv_handler = ConversationHandler(
         entry_points=[
             MessageHandler(filters.Regex("^⚙️ Setup$"), start_project),
+            MessageHandler(filters.Regex("^💰 Top-up$"), start_topup),
             MessageHandler(filters.Regex("^👤 Search User$"), start_search_user),
             MessageHandler(filters.Regex("^📢 Send SMS$"), start_broadcast),
             CallbackQueryHandler(project_action_callback, pattern="^(fe_|p_)"),
@@ -1153,7 +1399,13 @@ if __name__ == '__main__':
             STEP_EDIT_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_value)],
             STEP_ADMIN_SEARCH_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_search_user)],
             STEP_ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_broadcast)],
-            STEP_ADMIN_EDIT_SETTING: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_edit_setting)]
+            STEP_ADMIN_EDIT_SETTING: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_edit_setting)],
+            STEP_TOPUP_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_topup_amount)],
+            STEP_TOPUP_TXID: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_topup_txid)],
+            STEP_TOPUP_PHOTO: [
+                MessageHandler(filters.PHOTO, save_topup_photo),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, save_topup_photo)
+            ]
         },
         fallbacks=[
             CommandHandler('start', start), 
@@ -1166,6 +1418,7 @@ if __name__ == '__main__':
     
     app.add_handler(channel_handler)
     app.add_handler(conv_handler)
+    app.add_handler(CallbackQueryHandler(topup_action_callback, pattern="^topup_"))
     app.add_handler(CallbackQueryHandler(project_action_callback, pattern="^(p_|fe_)"))
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
