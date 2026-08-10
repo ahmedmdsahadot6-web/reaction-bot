@@ -287,8 +287,7 @@ def get_admin_keyboard():
 def get_admin_dashboard_keyboard():
     return ReplyKeyboardMarkup([
         [KeyboardButton("🤖 Bot Orders"), KeyboardButton("🌐 API Orders")],
-        [KeyboardButton("💳 Panel Balance")],
-        [KeyboardButton("📋 All Orders")],
+        [KeyboardButton("💳 Panel Balance"), KeyboardButton("📋 All Orders")],
         [KeyboardButton("💰 Telegram Super Service"), KeyboardButton("🧪 Services")],
         [KeyboardButton("🔄 Replace OFF ❌"), KeyboardButton("♻️ Refill OFF ❌")],
         [KeyboardButton("❌ Canceled"), KeyboardButton("⚠️ Failed/Partial")],
