@@ -121,6 +121,7 @@ def init_db():
         "smm_api_key": "792d092f1f7fdcebcb9233107b2f1f33",
         "smm_service_id": "1936",
         "coin_rate": "1",          # 1 coin = 1 reaction
+        "dollar_rate": "1000",     # $1 = 1000 coins
         "referral_bonus": "100"    # 100 coins per referral
     }
     for k, v in defaults.items():
@@ -142,7 +143,7 @@ def db_get_setting(key, default_val=""):
 def db_set_setting(key, value):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (k, str(value)))
     conn.commit()
     conn.close()
 
@@ -677,20 +678,22 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg_text, reply_markup=get_user_keyboard())
     return ConversationHandler.END
 
-# 💰 Top-up Flow Logic
+# 💰 Top-up Flow Logic (Updated for Dollar Rate)
 async def start_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = db_get_user(user_id)
     clean_admin = ADMIN_USERNAME.replace("@", "")
     
+    dollar_rate = db_get_setting("dollar_rate", "1000")
     context.user_data['topup_data'] = {}
     
     text = (
-        f"💎 **আপনার বর্তমান ব্যালেন্স:** {u_data['credit']} coins\n\n"
+        f"💎 **আপনার বর্তমান ব্যালেন্স:** {u_data['credit']} coins\n"
+        f"💵 **রেট:** $1 = {dollar_rate} Coins\n\n"
         f"💳 **টপ-আপ করার নিয়ম:**\n"
         f"১) এডমিনের সাথে কথা বলে পেমেন্ট করুন: @{clean_admin}\n"
         f"২) পেমেন্ট শেষে নিচে আবেদনের তথ্য জমা দিন।\n\n"
-        f"👉 **ধাপ ১:** কত কয়েন রিচার্জ করতে চান তা সংখ্যায় লিখুন (যেমন: `500`):"
+        f"👉 **ধাপ ১:** কত ডলার ডিপোজিট করতে চান তা লিখুন (যেমন: `1`, `5`, `10`):"
     )
     await update.message.reply_text(text, reply_markup=cancel_keyboard())
     return STEP_TOPUP_AMOUNT
@@ -702,12 +705,22 @@ async def save_topup_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("টপ-আপ প্রসেস বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
         return ConversationHandler.END
         
-    if not txt.isdigit() or int(txt) <= 0:
-        await update.message.reply_text("❌ অকার্যকর পরিমাণ! শুধুমাত্র সঠিক সংখ্যা লিখুন (যেমন: 500):")
+    try:
+        usd_val = float(txt)
+        if usd_val <= 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("❌ অকার্যকর পরিমাণ! শুধুমাত্র সঠিক সংখ্যা লিখুন (যেমন: 1, 5, 10):")
         return STEP_TOPUP_AMOUNT
 
-    context.user_data['topup_data']['amount'] = int(txt)
+    dollar_rate = float(db_get_setting("dollar_rate", "1000"))
+    calc_coins = int(usd_val * dollar_rate)
+
+    context.user_data['topup_data']['usd_amount'] = usd_val
+    context.user_data['topup_data']['amount'] = calc_coins
+
     await update.message.reply_text(
+        f"💰 **আপনার ডিপোজিট:** ${usd_val} = **{calc_coins} Coins**\n\n"
         f"👉 **ধাপ ২:** আপনার পেমেন্টের **Transaction ID (TxID)** টি লিখে পাঠান:",
         reply_markup=cancel_keyboard()
     )
@@ -746,6 +759,7 @@ async def save_topup_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     topup_info = context.user_data.get('topup_data', {})
     amount = topup_info.get('amount', 0)
+    usd_amount = topup_info.get('usd_amount', 0)
     txid = topup_info.get('txid', '')
 
     req_id = db_add_topup_request(user_id, txid, photo_id, amount)
@@ -754,7 +768,7 @@ async def save_topup_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await msg.reply_text(
         f"🎉 **আপনার টপ-আপ আবেদন সফলভাবে জমা হয়েছে!**\n\n"
         f"🆔 **আবেদন আইডি:** `#{req_id}`\n"
-        f"💰 **কয়েন:** {amount}\n"
+        f"💵 **আমোউন্ট:** ${usd_amount} ({amount} Coins)\n"
         f"💳 **TxID:** `{txid}`\n\n"
         f"⏳ অ্যাডমিন যাচাই করে খুব শীঘ্রই আপনার ব্যালেন্স যোগ করে দেবে।",
         reply_markup=get_user_keyboard()
@@ -1038,7 +1052,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
         ch_name = proj.get("channel_name", "Channel")
         reaction_count = proj.get("count", 100)
         
-        # Calculate needed coins based on rate
         needed_coins = int(reaction_count * coin_rate)
 
         if chat_username:
@@ -1073,7 +1086,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             db_save_user(uinfo)
             db_add_order(uid, order_id, ch_name, reaction_count, post_link)
 
-            # Send order completed log message directly to LOG_CHANNEL (@vucctx) instead of user PM
             try:
                 await context.bot.send_message(
                     chat_id=LOG_CHANNEL,
@@ -1170,7 +1182,8 @@ async def admin_settings_edit_callback(update: Update, context: ContextTypes.DEF
         prompts = {
             "smm_api_key": "🔑 **নতুন SMM Panel API Key পাঠান:**",
             "smm_service_id": "🧪 **নতুন SMM Service ID পাঠান:**",
-            "coin_rate": "💡 **নতুন Coin Rate লিখুন:**\n(যেমন: `1` মানে ১ কয়েন = ১টি রিয়েকশন, `0.5` মানে ১ কয়েন = ২টি রিয়েকশন)",
+            "coin_rate": "💡 **নতুন Reaction Coin Rate লিখুন:**\n(যেমন: `1` মানে ১ কয়েন = ১টি রিয়েকশন, `0.5` মানে ১ কয়েন = ২টি রিয়েকশন)",
+            "dollar_rate": "💵 **নতুন Dollar Rate ($1 = ? Coins) লিখুন:**\n(যেমন: `1000` মানে $1 = 1000 Coins)",
             "referral_bonus": "👥 **রেফারেল বোনাসের নতুন Coins সংখ্যা লিখুন:**\n(যেমন: `100`, `200`)"
         }
         await query.message.reply_text(prompts.get(key, "✍️ নতুন মান লিখে পাঠান:"), reply_markup=cancel_keyboard())
@@ -1279,11 +1292,17 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif text == "💡 Coin Rate Settings":
             curr_rate = db_get_setting("coin_rate", "1")
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("✏️ Edit Rate", callback_data="edit_setting_coin_rate")]])
+            curr_dollar = db_get_setting("dollar_rate", "1000")
+            
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("✏️ Edit Reaction Coin Rate", callback_data="edit_setting_coin_rate")],
+                [InlineKeyboardButton("✏️ Edit Dollar Rate ($1 = ? Coins)", callback_data="edit_setting_dollar_rate")]
+            ])
             return await update.message.reply_text(
                 f"💡 **কয়েন রেট সেটিংস:**\n───────────────────\n"
-                f"বর্তমান রেট: **প্রতি রিয়্যাকশনে {curr_rate} কয়েন**\n\n"
-                f"কয়েন এক্সচেঞ্জ রেট পরিবর্তন করতে নিচের বাটনে ক্লিক করুন।", 
+                f"📌 প্রতি রিয়্যাকশনে কয়েন: **{curr_rate} Coins**\n"
+                f"💵 ডলারে কয়েন রেট: **$1 = {curr_dollar} Coins**\n\n"
+                f"যেকোনো রেট পরিবর্তন করতে নিচের অপশন বেছে নিন:", 
                 reply_markup=kb
             )
 
