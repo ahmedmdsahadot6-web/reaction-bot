@@ -185,7 +185,7 @@ def get_user_keyboard():
     kb = [
         [KeyboardButton("⚙️ Setup"), KeyboardButton("👤 Profile")],
         [KeyboardButton("🛠️ Settings"), KeyboardButton("💰 Top-up")],
-        [KeyboardButton("📋 Order List"), KeyboardButton("📜 History")],
+        [KeyboardButton("📋 Order List"), KeyboardButton("🎧 Support")],
         [KeyboardButton("👥 Refer & Earn")]
     ]
     return ReplyKeyboardMarkup(kb, resize_keyboard=True)
@@ -855,8 +855,12 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "📋 Order List":
         await show_my_projects(update.message, str_id)
 
-    elif text == "📜 History":
-        await update.message.reply_text("📜 **Order History:**\n\nAll your past auto-reaction orders and transactions are recorded automatically.")
+    elif text in ["🎧 Support", "Support"]:
+        inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 Contact Support", url="https://t.me/ARIYAN_VAI_BOSS")]])
+        await update.message.reply_text(
+            "🎧 **Need Help?**\n\nClick the button below to message our support directly:",
+            reply_markup=inline_kb
+        )
 
     elif text == "👥 Refer & Earn":
         ref_link = f"https://t.me/{BOT_USERNAME}?start={str_id}"
