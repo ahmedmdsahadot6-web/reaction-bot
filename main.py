@@ -251,7 +251,23 @@ def send_smm_order(link, quantity):
         logger.error(f"SMM API Error: {e}")
         return {"error": str(e)}
 
-# 📱 Keyboards (সব বাটন সম্পূর্ণ ইংরেজিতে)
+# 💳 SMM Panel Balance Check Function
+def get_smm_balance():
+    api_key = db_get_setting("smm_api_key", "792d092f1f7fdcebcb9233107b2f1f33")
+    payload = {
+        'key': api_key,
+        'action': 'balance'
+    }
+    try:
+        response = requests.post(SMM_API_URL, data=payload, timeout=15)
+        res_data = response.json()
+        logger.info(f"SMM Balance Response: {res_data}")
+        return res_data
+    except Exception as e:
+        logger.error(f"SMM Balance API Error: {e}")
+        return {"error": str(e)}
+
+# 📱 Keyboards
 def get_user_keyboard():
     kb = [
         [KeyboardButton("⚙️ Setup"), KeyboardButton("👤 Profile")],
@@ -271,6 +287,7 @@ def get_admin_keyboard():
 def get_admin_dashboard_keyboard():
     return ReplyKeyboardMarkup([
         [KeyboardButton("🤖 Bot Orders"), KeyboardButton("🌐 API Orders")],
+        [KeyboardButton("💳 Panel Balance")],
         [KeyboardButton("📋 All Orders")],
         [KeyboardButton("💰 Telegram Super Service"), KeyboardButton("🧪 Services")],
         [KeyboardButton("🔄 Replace OFF ❌"), KeyboardButton("♻️ Refill OFF ❌")],
@@ -990,6 +1007,24 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             curr_key = db_get_setting("smm_api_key", "792d092f1f7fdcebcb9233107b2f1f33")
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("✏️ Edit API Key", callback_data="edit_setting_smm_api_key")]])
             return await update.message.reply_text(f"🌐 **SMM Panel API Key:**\n\n`{curr_key}`", reply_markup=kb)
+
+        elif text in ["💳 Panel Balance", "panel balance"]:
+            bal_res = get_smm_balance()
+            if bal_res and "balance" in bal_res:
+                bal = bal_res.get("balance", "0")
+                currency = bal_res.get("currency", "USD")
+                await update.message.reply_text(
+                    f"💳 **SMM Panel Balance:**\n───────────────────\n"
+                    f"💰 Current Balance: **{bal} {currency}**",
+                    reply_markup=get_admin_dashboard_keyboard()
+                )
+            else:
+                err = bal_res.get("error") or bal_res.get("message") or "Unknown error"
+                await update.message.reply_text(
+                    f"❌ **Panel Balance Fetch Failed!**\n\nReason: `{err}`",
+                    reply_markup=get_admin_dashboard_keyboard()
+                )
+            return
 
         elif text == "🧪 Services":
             curr_svc = db_get_setting("smm_service_id", "1936")
