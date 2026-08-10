@@ -3,6 +3,7 @@ import os
 import json
 import re
 import asyncio
+import sqlite3
 import requests
 from datetime import datetime
 from threading import Thread
@@ -14,7 +15,7 @@ from telegram.ext import (
     MessageHandler, filters, ContextTypes, ConversationHandler
 )
 
-# 🌐 Keep-Alive Web Server + Self Ping System (Render 24/7 Active)
+# 🌐 Keep-Alive Web Server + Self Ping System
 web_app = Flask('')
 
 @web_app.route('/')
@@ -25,7 +26,7 @@ def ping_self():
     render_url = os.environ.get("RENDER_EXTERNAL_URL", "https://reaction-bot-7d1u.onrender.com")
     while True:
         try:
-            asyncio.run(asyncio.sleep(280)) # Ping every 4 minutes 50 seconds
+            asyncio.run(asyncio.sleep(280)) # Ping every 4 mins 50 secs
             requests.get(render_url, timeout=10)
             logger.info("📡 Keeping bot server active 24/7...")
         except Exception as e:
@@ -46,16 +47,16 @@ def keep_alive():
 
 # 🔑 Configuration
 BOT_TOKEN = "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw"
-BOT_USERNAME = "@Sahadot_reaction123_bot"
+BOT_USERNAME = "Sahadot_reaction123_bot"
 ADMIN_IDS = [8454401183, 7871224176]
 ADMIN_USERNAME = "@SOYABUR_AS_LEADER"
 
-# 🌐 SMM Panel (1xpanel.com) API Config
+# 🌐 SMM Panel Config
 SMM_API_URL = "https://1xpanel.com/api/v2"
 SMM_API_KEY = "792d092f1f7fdcebcb9233107b2f1f33"
 SMM_SERVICE_ID = 1936 
 
-DB_FILE = "database.json"
+DB_FILE = "database.db"
 
 # 📝 Logging System
 logging.basicConfig(
@@ -64,47 +65,104 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# 💾 Database
-def load_data():
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            logger.error(f"Failed to load DB: {e}")
-            return {"users": {}, "blocked": []}
-    return {"users": {}, "blocked": []}
+# 🗄️ Permanent SQLite Database Manager
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    # Users table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            user_id TEXT PRIMARY KEY,
+            credit INTEGER DEFAULT 500,
+            ref_count INTEGER DEFAULT 0,
+            ref_credit INTEGER DEFAULT 0,
+            projects TEXT DEFAULT '[]',
+            is_blocked INTEGER DEFAULT 0
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-def save_data(data):
-    try:
-        with open(DB_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.error(f"Failed to save DB: {e}")
+init_db()
 
-db = load_data()
-if "users" not in db: db["users"] = {}
-if "blocked" not in db: db["blocked"] = []
+def db_get_user(user_id):
+    str_id = str(user_id)
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT credit, ref_count, ref_credit, projects, is_blocked FROM users WHERE user_id = ?", (str_id,))
+    row = cursor.fetchone()
+    
+    if not row:
+        default_projects = json.dumps([])
+        cursor.execute(
+            "INSERT INTO users (user_id, credit, ref_count, ref_credit, projects, is_blocked) VALUES (?, ?, ?, ?, ?, ?)",
+            (str_id, 500, 0, 0, default_projects, 0)
+        )
+        conn.commit()
+        conn.close()
+        return {
+            "user_id": str_id,
+            "credit": 500,
+            "ref_count": 0,
+            "ref_credit": 0,
+            "projects": [],
+            "is_blocked": 0
+        }
+    
+    conn.close()
+    return {
+        "user_id": str_id,
+        "credit": row[0],
+        "ref_count": row[1],
+        "ref_credit": row[2],
+        "projects": json.loads(row[3]) if row[3] else [],
+        "is_blocked": row[4]
+    }
+
+def db_save_user(u_data):
+    str_id = str(u_data["user_id"])
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE users 
+        SET credit = ?, ref_count = ?, ref_credit = ?, projects = ?, is_blocked = ?
+        WHERE user_id = ?
+    ''', (
+        u_data["credit"],
+        u_data["ref_count"],
+        u_data["ref_credit"],
+        json.dumps(u_data["projects"], ensure_ascii=False),
+        u_data.get("is_blocked", 0),
+        str_id
+    ))
+    conn.commit()
+    conn.close()
+
+def db_get_all_users():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, credit, ref_count, ref_credit, projects, is_blocked FROM users")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    users = {}
+    for r in rows:
+        users[r[0]] = {
+            "user_id": r[0],
+            "credit": r[1],
+            "ref_count": r[2],
+            "ref_credit": r[3],
+            "projects": json.loads(r[4]) if r[4] else [],
+            "is_blocked": r[5]
+        }
+    return users
 
 # States
 (STEP_CHANNEL, STEP_DISTRIBUTION, STEP_SPEED, STEP_COUNT, STEP_VIEWS, 
  STEP_REVIEW, STEP_EDIT_FIELD, STEP_EDIT_VALUE,
  STEP_ADMIN_ADD_CREDIT, STEP_ADMIN_BLOCK_USER, STEP_ADMIN_BROADCAST) = range(11)
 
-def get_user_data(user_id):
-    str_id = str(user_id)
-    if str_id not in db["users"]:
-        db["users"][str_id] = {
-            "credit": 500,
-            "ref_count": 0,
-            "ref_credit": 0,
-            "projects": [],
-            "last_daily_bonus": None
-        }
-        save_data(db)
-    return db["users"][str_id]
-
-# 🛒 SMM Panel Auto Order Submit Function
+# 🛒 SMM Order Submit Function
 def send_smm_order(link, quantity):
     payload = {
         'key': SMM_API_KEY,
@@ -142,24 +200,34 @@ def get_admin_keyboard():
 def cancel_keyboard():
     return ReplyKeyboardMarkup([[KeyboardButton("❌ Cancel")]], resize_keyboard=True)
 
-# 🚀 /start
+# 🚀 /start Command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     str_id = str(user.id)
 
-    if str_id in db["blocked"]:
+    u_data = db_get_user(str_id)
+
+    if u_data.get("is_blocked", 0) == 1:
         await update.message.reply_text("🚫 You are blocked from using this bot.")
         return
 
     if context.args and len(context.args) > 0:
         referrer_id = context.args[0]
-        if referrer_id != str_id and referrer_id in db["users"] and str_id not in db["users"]:
-            db["users"][referrer_id]["ref_count"] += 1
-            db["users"][referrer_id]["credit"] += 100
-            db["users"][referrer_id]["ref_credit"] += 100
-            save_data(db)
+        ref_data = db_get_user(referrer_id)
+        if referrer_id != str_id and ref_data:
+            # Check if this user is new
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM users WHERE user_id = ?", (str_id,))
+            exists = cursor.fetchone()[0]
+            conn.close()
+            
+            if exists <= 1 and u_data["ref_count"] == 0:
+                ref_data["ref_count"] += 1
+                ref_data["credit"] += 100
+                ref_data["ref_credit"] += 100
+                db_save_user(ref_data)
 
-    get_user_data(user.id)
     await update.message.reply_text(
         f"👋 Welcome {user.first_name}!\n\n"
         f"🚀 **Multi-Reaction SMM Engine Active**\n"
@@ -173,19 +241,22 @@ async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("❌ You are not an Admin!")
         return
 
+    all_users = db_get_all_users()
+    blocked_count = sum(1 for u in all_users.values() if u.get("is_blocked", 0) == 1)
+
     text = (
         f"👑 **ADMIN CONTROL PANEL**\n"
         f"───────────────────\n"
-        f"👥 Total Users: {len(db['users'])}\n"
-        f"🚫 Blocked Users: {len(db['blocked'])}\n"
+        f"👥 Total Users: {len(all_users)}\n"
+        f"🚫 Blocked Users: {blocked_count}\n"
         f"───────────────────"
     )
     await update.message.reply_text(text, reply_markup=get_admin_keyboard())
 
-# --- ➕ Create Project via "⚙️ Setup" ---
+# --- ⚙️ Setup Logic ---
 async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    u_data = get_user_data(user_id)
+    u_data = db_get_user(user_id)
 
     if u_data['credit'] <= 0:
         clean_admin = ADMIN_USERNAME.replace("@", "")
@@ -415,13 +486,13 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop('draft_project', None)
         return ConversationHandler.END
 
-    u_data = get_user_data(user_id)
+    u_data = db_get_user(user_id)
     draft['channel_id'] = channel_id
     draft['channel_name'] = channel_title
 
     u_data['projects'] = [p for p in u_data.get('projects', []) if str(p.get('channel_id')) != channel_id]
     u_data['projects'].append(draft)
-    save_data(db)
+    db_save_user(u_data)
 
     context.user_data.pop('draft_project', None)
 
@@ -447,21 +518,21 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg_text, reply_markup=get_user_keyboard())
     return ConversationHandler.END
 
-# 🎛️ Project ON/OFF Toggle and Edit Handler
+# 🛠️ Project Action Callback
 async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = str(query.from_user.id)
     data = query.data
 
-    u_data = get_user_data(user_id)
+    u_data = db_get_user(user_id)
     projects = u_data.get('projects', [])
 
     if data.startswith("p_toggle_"):
         idx = int(data.split("_")[2])
         if 0 <= idx < len(projects):
             projects[idx]['status'] = "OFF" if projects[idx].get('status', 'ON') == "ON" else "ON"
-            save_data(db)
+            db_save_user(u_data)
             await query.message.reply_text(f"✅ Project status changed to **{projects[idx]['status']}**!")
             return await show_my_projects(query.message, user_id)
 
@@ -512,7 +583,7 @@ async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     user_id = str(update.effective_user.id)
-    u_data = get_user_data(user_id)
+    u_data = db_get_user(user_id)
     projects = u_data.get('projects', [])
 
     idx = target['idx']
@@ -549,15 +620,15 @@ async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             projects[idx][field] = val_txt
 
-        save_data(db)
+        db_save_user(u_data)
         context.user_data.pop('edit_target', None)
         await update.message.reply_text("🎉 **Successfully updated!**", reply_markup=get_user_keyboard())
     
     return ConversationHandler.END
 
-# 📂 Display Projects function (Used for Settings / Project Management)
+# 📂 Display Projects function
 async def show_my_projects(message_obj, user_id):
-    u_data = get_user_data(user_id)
+    u_data = db_get_user(user_id)
     projects = u_data.get('projects', [])
 
     if not projects:
@@ -582,7 +653,7 @@ async def show_my_projects(message_obj, user_id):
         )
         await message_obj.reply_text(p_text, reply_markup=InlineKeyboardMarkup(kb))
 
-# 🚀 📌 Core Auto-Reaction Order Engine
+# 🚀 Core Auto-Reaction Post Monitor
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.channel_post or update.edited_channel_post
     if not msg or not msg.chat:
@@ -595,8 +666,9 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
     logger.info(f"📢 [POST DETECTED] Channel ID: {raw_channel_id} | Username: @{chat_username} | Message ID: {post_id}")
 
     matched_projects = []
+    all_users = db_get_all_users()
 
-    for uid, uinfo in db["users"].items():
+    for uid, uinfo in all_users.items():
         for proj in uinfo.get("projects", []):
             proj_cid = str(proj.get("channel_id", ""))
             proj_uname = str(proj.get("username", "")).lower().replace("@", "")
@@ -647,7 +719,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
         if smm_res and "order" in smm_res:
             order_id = smm_res["order"]
             uinfo["credit"] -= reaction_count
-            save_data(db)
+            db_save_user(uinfo)
 
             try:
                 await context.bot.send_message(
@@ -688,10 +760,11 @@ async def process_admin_credit(update: Update, context: ContextTypes.DEFAULT_TYP
     try:
         parts = update.message.text.split()
         target_id, amount = parts[0], int(parts[1])
-        if target_id in db['users']:
-            db['users'][target_id]['credit'] += amount
-            save_data(db)
-            await update.message.reply_text(f"✅ User {target_id} current balance: {db['users'][target_id]['credit']}", reply_markup=get_admin_keyboard())
+        u_data = db_get_user(target_id)
+        if u_data:
+            u_data['credit'] += amount
+            db_save_user(u_data)
+            await update.message.reply_text(f"✅ User {target_id} current balance: {u_data['credit']}", reply_markup=get_admin_keyboard())
         else:
             await update.message.reply_text("❌ User ID not found!", reply_markup=get_admin_keyboard())
     except Exception as e:
@@ -705,13 +778,14 @@ async def start_block_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def process_admin_block(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_id = update.message.text.strip()
-    if target_id not in db['blocked']:
-        db['blocked'].append(target_id)
-        save_data(db)
+    u_data = db_get_user(target_id)
+    if u_data.get("is_blocked", 0) == 0:
+        u_data["is_blocked"] = 1
+        db_save_user(u_data)
         await update.message.reply_text(f"🚫 User {target_id} has been blocked.", reply_markup=get_admin_keyboard())
     else:
-        db['blocked'].remove(target_id)
-        save_data(db)
+        u_data["is_blocked"] = 0
+        db_save_user(u_data)
         await update.message.reply_text(f"✅ User {target_id} has been unblocked.", reply_markup=get_admin_keyboard())
     return ConversationHandler.END
 
@@ -723,7 +797,8 @@ async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def process_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg_text = update.message.text
     count = 0
-    for uid in db['users']:
+    all_users = db_get_all_users()
+    for uid in all_users:
         try:
             await context.bot.send_message(chat_id=int(uid), text=f"📢 **Broadcast Notice:**\n\n{msg_text}")
             count += 1
@@ -737,7 +812,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     str_id = str(user_id)
     text = update.message.text or ""
-    u_data = get_user_data(str_id)
+    u_data = db_get_user(str_id)
 
     if text and text.strip().lower() in ["admin", "অ্যাডমিন"]:
         return await admin_panel_command(update, context)
@@ -746,8 +821,9 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text in ["📊 Bot Status", "📊 বট স্ট্যাটাস"]:
             return await admin_panel_command(update, context)
         elif text in ["📋 User List", "📋 ইউজার লিস্ট"]:
+            all_u = db_get_all_users()
             u_list = "📋 **User List:**\n───────────────────\n"
-            for uid, uinfo in list(db['users'].items())[:15]:
+            for uid, uinfo in list(all_u.items())[:15]:
                 u_list += f"🆔 `{uid}` | 💎 Coins: {uinfo.get('credit', 0)}\n"
             return await update.message.reply_text(u_list, reply_markup=get_admin_keyboard())
         elif text in ["🏠 Main Menu", "🏠 প্রধান মেনু"]:
@@ -765,7 +841,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(profile_text)
 
     elif text == "🛠️ Settings":
-        # 🛠️ Settings অপশনে প্রজেক্ট সেটিংস ও কনফিগারেশন যোগ করে দেওয়া হয়েছে
         await show_my_projects(update.message, str_id)
 
     elif text == "💰 Top-up":
@@ -809,7 +884,7 @@ if __name__ == '__main__':
             MessageHandler(filters.Regex("^(💳 Credit Control|💳 ক্রেডিট কন্ট্রোল)$"), start_add_credit),
             MessageHandler(filters.Regex("^(🚫 Block/Unblock User|🚫 ইউজার ব্লক/রিমুভ)$"), start_block_user),
             MessageHandler(filters.Regex("^(📢 Broadcast All|📢 অল ইউজার ব্রডকাস্ট)$"), start_broadcast),
-            CallbackQueryHandler(project_action_callback, pattern="^(fe_)")
+            CallbackQueryHandler(project_action_callback, pattern="^(fe_|p_)")
         ],
         states={
             STEP_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_channel)],
@@ -826,7 +901,11 @@ if __name__ == '__main__':
             STEP_ADMIN_BLOCK_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_block)],
             STEP_ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_broadcast)]
         },
-        fallbacks=[CommandHandler('start', start), MessageHandler(filters.Regex("^(❌ Cancel|Cancel|❌ বাতিল করুন|বাতিল করুন)$"), cancel_flow)]
+        fallbacks=[
+            CommandHandler('start', start), 
+            MessageHandler(filters.Regex("^(❌ Cancel|Cancel|❌ বাতিল করুন|বাতিল করুন)$"), cancel_flow),
+            CallbackQueryHandler(cancel_flow, pattern="^cancel_flow$")
+        ]
     )
 
     channel_handler = MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post)
