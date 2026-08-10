@@ -46,15 +46,13 @@ def keep_alive():
     t_ping.start()
 
 # 🔑 Configuration
-BOT_TOKEN = "8320025447:AAFWnP_asWXs6WXS-h_gPAy6Baikd6-4jMc"
-BOT_USERNAME = "@TGSUPER_SERVICE_BOT"
+BOT_TOKEN = "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw"
+BOT_USERNAME = "@Sahadot_reaction123_bot"
 ADMIN_IDS = [8454401183, 7871224176]
 ADMIN_USERNAME = "@SOYABUR_AS_LEADER"
 
-# 🌐 SMM Panel Config
+# 🌐 Default SMM Panel Config
 SMM_API_URL = "https://1xpanel.com/api/v2"
-SMM_API_KEY = "792d092f1f7fdcebcb9233107b2f1f33"
-SMM_SERVICE_ID = 1936 
 
 DB_FILE = "database.db"
 
@@ -95,10 +93,43 @@ def init_db():
             created_at TEXT
         )
     ''')
+    # Settings table for Admin Configuration
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    ''')
+    
+    # Default Settings Setup
+    defaults = {
+        "smm_api_key": "792d092f1f7fdcebcb9233107b2f1f33",
+        "smm_service_id": "1936",
+        "coin_rate": "1",          # 1 coin = 1 reaction
+        "referral_bonus": "100"    # 100 coins per referral
+    }
+    for k, v in defaults.items():
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v))
+
     conn.commit()
     conn.close()
 
 init_db()
+
+def db_get_setting(key, default_val=""):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else default_val
+
+def db_set_setting(key, value):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+    conn.commit()
+    conn.close()
 
 def db_get_user(user_id):
     str_id = str(user_id)
@@ -197,14 +228,17 @@ def db_get_user_orders(user_id, limit=10):
 # States
 (STEP_CHANNEL, STEP_DISTRIBUTION, STEP_SPEED, STEP_COUNT, STEP_VIEWS, 
  STEP_REVIEW, STEP_EDIT_FIELD, STEP_EDIT_VALUE,
- STEP_ADMIN_SEARCH_USER, STEP_ADMIN_BROADCAST) = range(10)
+ STEP_ADMIN_SEARCH_USER, STEP_ADMIN_BROADCAST, STEP_ADMIN_EDIT_SETTING) = range(11)
 
 # 🛒 SMM Order Submit Function
 def send_smm_order(link, quantity):
+    api_key = db_get_setting("smm_api_key", "792d092f1f7fdcebcb9233107b2f1f33")
+    service_id = db_get_setting("smm_service_id", "1936")
+    
     payload = {
-        'key': SMM_API_KEY,
+        'key': api_key,
         'action': 'add',
-        'service': SMM_SERVICE_ID,
+        'service': service_id,
         'link': link,
         'quantity': quantity
     }
@@ -270,9 +304,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             conn.close()
             
             if exists <= 1 and u_data["ref_count"] == 0:
+                ref_bonus = int(db_get_setting("referral_bonus", "100"))
                 ref_data["ref_count"] += 1
-                ref_data["credit"] += 100
-                ref_data["ref_credit"] += 100
+                ref_data["credit"] += ref_bonus
+                ref_data["ref_credit"] += ref_bonus
                 db_save_user(ref_data)
 
     await update.message.reply_text(
@@ -558,6 +593,7 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('draft_project', None)
     context.user_data.pop('edit_target', None)
+    context.user_data.pop('admin_edit_key', None)
     msg_text = "Process cancelled."
     if update.callback_query:
         await update.callback_query.message.reply_text(msg_text, reply_markup=get_user_keyboard())
@@ -763,10 +799,15 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
     if not matched_projects:
         return
 
+    coin_rate = float(db_get_setting("coin_rate", "1"))
+
     for uid, uinfo, proj in matched_projects:
         user_chat_id = int(uid)
         ch_name = proj.get("channel_name", "Channel")
         reaction_count = proj.get("count", 100)
+        
+        # Calculate needed coins based on rate
+        needed_coins = int(reaction_count * coin_rate)
 
         if chat_username:
             post_link = f"https://t.me/{chat_username}/{post_id}"
@@ -776,14 +817,14 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             clean_cid = raw_channel_id.replace("-100", "")
             post_link = f"https://t.me/c/{clean_cid}/{post_id}"
 
-        if uinfo.get("credit", 0) < reaction_count:
+        if uinfo.get("credit", 0) < needed_coins:
             try:
                 await context.bot.send_message(
                     chat_id=user_chat_id,
                     text=f"⚠️ **Insufficient Balance!**\n\n"
                          f"📢 **Channel:** {ch_name}\n"
                          f"📌 **Post Link:** {post_link}\n"
-                         f"Required Coins: {reaction_count}\n"
+                         f"Required Coins: {needed_coins}\n"
                          f"Remaining Coins: {uinfo.get('credit', 0)}\n\n"
                          f"Please recharge your account balance."
                 )
@@ -796,7 +837,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
 
         if smm_res and "order" in smm_res:
             order_id = smm_res["order"]
-            uinfo["credit"] -= reaction_count
+            uinfo["credit"] -= needed_coins
             db_save_user(uinfo)
             db_add_order(uid, order_id, ch_name, reaction_count, post_link)
 
@@ -807,7 +848,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                          f"📢 **Channel:** {ch_name}\n"
                          f"🆔 **SMM Order ID:** `{order_id}`\n"
                          f"✨ **Reactions:** {reaction_count}\n"
-                         f"💰 **Deducted Coins:** {reaction_count}\n"
+                         f"💰 **Deducted Coins:** {needed_coins}\n"
                          f"💎 **Remaining Coins:** {uinfo.get('credit', 0)}\n\n"
                          f"📌 **Post Link:** {post_link}",
                     reply_markup=post_btn
@@ -882,6 +923,42 @@ async def process_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_
     await update.message.reply_text(f"🎉 Message sent to {count} users!", reply_markup=get_admin_keyboard())
     return ConversationHandler.END
 
+# ⚙️ Dynamic Settings Edit Handlers
+async def admin_settings_edit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    if data.startswith("edit_setting_"):
+        key = data.replace("edit_setting_", "")
+        context.user_data['admin_edit_key'] = key
+        
+        prompts = {
+            "smm_api_key": "🔑 **Send new SMM Panel API Key:**",
+            "smm_service_id": "🧪 **Send new SMM Service ID:**",
+            "coin_rate": "💡 **Send new Coin Rate:**\n(e.g., `1` means 1 coin = 1 reaction, `0.5` means 1 coin = 2 reactions)",
+            "referral_bonus": "👥 **Send new Referral Bonus Coins:**\n(e.g., `100`, `200`)"
+        }
+        await query.message.reply_text(prompts.get(key, "✍️ Send new value:"), reply_markup=cancel_keyboard())
+        return STEP_ADMIN_EDIT_SETTING
+
+async def process_admin_edit_setting(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = update.message.text.strip()
+    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+        context.user_data.pop('admin_edit_key', None)
+        await update.message.reply_text("Edit cancelled.", reply_markup=get_admin_dashboard_keyboard())
+        return ConversationHandler.END
+
+    key = context.user_data.get('admin_edit_key')
+    if not key:
+        await update.message.reply_text("❌ Something went wrong!", reply_markup=get_admin_dashboard_keyboard())
+        return ConversationHandler.END
+
+    db_set_setting(key, txt)
+    context.user_data.pop('admin_edit_key', None)
+    await update.message.reply_text(f"🎉 **{key.upper()} Successfully Updated to:** `{txt}`", reply_markup=get_admin_dashboard_keyboard())
+    return ConversationHandler.END
+
 # Menu Handlers
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -909,9 +986,39 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text == "📊 Admin Dashboard":
             return await update.message.reply_text("📊 **Admin Dashboard Settings:**", reply_markup=get_admin_dashboard_keyboard())
         
-        elif text in ["🤖 Bot Orders", "🌐 API Orders", "📋 All Orders", "💰 Telegram Super Service", 
-                      "🧪 Services", "🔄 Replace OFF ❌", "♻️ Refill OFF ❌", "❌ Canceled", 
-                      "⚠️ Failed/Partial", "💡 Coin Rate Settings", "👥 Referral Settings"]:
+        elif text == "🌐 API Orders":
+            curr_key = db_get_setting("smm_api_key", "792d092f1f7fdcebcb9233107b2f1f33")
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("✏️ Edit API Key", callback_data="edit_setting_smm_api_key")]])
+            return await update.message.reply_text(f"🌐 **SMM Panel API Key:**\n\n`{curr_key}`", reply_markup=kb)
+
+        elif text == "🧪 Services":
+            curr_svc = db_get_setting("smm_service_id", "1936")
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("✏️ Edit Service ID", callback_data="edit_setting_smm_service_id")]])
+            return await update.message.reply_text(f"🧪 **SMM Service ID:**\n\n`{curr_svc}`", reply_markup=kb)
+
+        elif text == "💡 Coin Rate Settings":
+            curr_rate = db_get_setting("coin_rate", "1")
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("✏️ Edit Rate", callback_data="edit_setting_coin_rate")]])
+            return await update.message.reply_text(
+                f"💡 **Coin Rate Settings:**\n───────────────────\n"
+                f"Current Rate: **{curr_rate} Coin(s) per Reaction**\n\n"
+                f"Click below to change the coin exchange rate.", 
+                reply_markup=kb
+            )
+
+        elif text == "👥 Referral Settings":
+            curr_ref = db_get_setting("referral_bonus", "100")
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("✏️ Edit Ref Bonus", callback_data="edit_setting_referral_bonus")]])
+            return await update.message.reply_text(
+                f"👥 **Referral Settings:**\n───────────────────\n"
+                f"Current Bonus: **{curr_ref} Coins per Referral**\n\n"
+                f"Click below to change the referral bonus coins.", 
+                reply_markup=kb
+            )
+
+        elif text in ["🤖 Bot Orders", "📋 All Orders", "💰 Telegram Super Service", 
+                      "🔄 Replace OFF ❌", "♻️ Refill OFF ❌", "❌ Canceled", 
+                      "⚠️ Failed/Partial"]:
             return await update.message.reply_text(f"⚙️ **{text}** option selected.", reply_markup=get_admin_dashboard_keyboard())
 
         elif text == "👥 Users Report":
@@ -960,10 +1067,11 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif text == "👥 Refer & Earn":
         ref_link = f"https://t.me/{BOT_USERNAME}?start={str_id}"
+        ref_bonus = db_get_setting("referral_bonus", "100")
         await update.message.reply_text(
             f"👥 **Refer & Earn Program**\n───────────────────\n"
             f"🔗 **Your Referral Link:**\n{ref_link}\n\n"
-            f"🎁 Earn 100 free coins for every successful referral!"
+            f"🎁 Earn {ref_bonus} free coins for every successful referral!"
         )
 
 if __name__ == '__main__':
@@ -983,7 +1091,8 @@ if __name__ == '__main__':
             MessageHandler(filters.Regex("^⚙️ Setup$"), start_project),
             MessageHandler(filters.Regex("^👤 Search User$"), start_search_user),
             MessageHandler(filters.Regex("^📢 Send SMS$"), start_broadcast),
-            CallbackQueryHandler(project_action_callback, pattern="^(fe_|p_)")
+            CallbackQueryHandler(project_action_callback, pattern="^(fe_|p_)"),
+            CallbackQueryHandler(admin_settings_edit_callback, pattern="^edit_setting_")
         ],
         states={
             STEP_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_channel)],
@@ -997,7 +1106,8 @@ if __name__ == '__main__':
             ],
             STEP_EDIT_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_value)],
             STEP_ADMIN_SEARCH_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_search_user)],
-            STEP_ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_broadcast)]
+            STEP_ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_broadcast)],
+            STEP_ADMIN_EDIT_SETTING: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_edit_setting)]
         },
         fallbacks=[
             CommandHandler('start', start), 
