@@ -197,7 +197,7 @@ def db_get_user_orders(user_id, limit=10):
 # States
 (STEP_CHANNEL, STEP_DISTRIBUTION, STEP_SPEED, STEP_COUNT, STEP_VIEWS, 
  STEP_REVIEW, STEP_EDIT_FIELD, STEP_EDIT_VALUE,
- STEP_ADMIN_ADD_CREDIT, STEP_ADMIN_BLOCK_USER, STEP_ADMIN_BROADCAST) = range(11)
+ STEP_ADMIN_SEARCH_USER, STEP_ADMIN_BROADCAST) = range(10)
 
 # 🛒 SMM Order Submit Function
 def send_smm_order(link, quantity):
@@ -229,9 +229,9 @@ def get_user_keyboard():
 
 def get_admin_keyboard():
     return ReplyKeyboardMarkup([
-        [KeyboardButton("📊 Bot Status"), KeyboardButton("📋 User List")],
-        [KeyboardButton("💳 Credit Control"), KeyboardButton("🚫 Block/Unblock User")],
-        [KeyboardButton("📢 Broadcast All"), KeyboardButton("🏠 Main Menu")]
+        [KeyboardButton("📊 Admin Dashboard")],
+        [KeyboardButton("👥 Users Report"), KeyboardButton("📢 Send SMS")],
+        [KeyboardButton("👤 Search User"), KeyboardButton("🏠 Main Menu")]
     ], resize_keyboard=True)
 
 def cancel_keyboard():
@@ -282,7 +282,7 @@ async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     blocked_count = sum(1 for u in all_users.values() if u.get("is_blocked", 0) == 1)
 
     text = (
-        f"👑 **ADMIN CONTROL PANEL**\n"
+        f"📊 **ADMIN DASHBOARD**\n"
         f"───────────────────\n"
         f"👥 Total Users: {len(all_users)}\n"
         f"🚫 Blocked Users: {blocked_count}\n"
@@ -723,11 +723,9 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             logger.info(f"⏩ Media group {media_group_id} already processed. Skipping duplicate image.")
             return
         PROCESSED_MEDIA_GROUPS.add(media_group_id)
-        # Prevent memory leaks by capping set size
         if len(PROCESSED_MEDIA_GROUPS) > 1000:
             PROCESSED_MEDIA_GROUPS.clear()
         
-        # Small delay to let all album items arrive
         await asyncio.sleep(2)
 
     raw_channel_id = str(msg.chat.id)
@@ -822,83 +820,91 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             except Exception as e:
                 logger.error(f"Failed to send order fail alert: {e}")
 
-# 👑 Admin commands
-async def start_add_credit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# 👑 Admin New Features
+async def start_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
-    await update.message.reply_text("💳 To add coins write: `User_ID Amount`\nExample: `8454401183 500`", reply_markup=cancel_keyboard())
-    return STEP_ADMIN_ADD_CREDIT
+    await update.message.reply_text("👤 **Enter User ID to Search:**", reply_markup=cancel_keyboard())
+    return STEP_ADMIN_SEARCH_USER
 
-async def process_admin_credit(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        parts = update.message.text.split()
-        target_id, amount = parts[0], int(parts[1])
-        u_data = db_get_user(target_id)
-        if u_data:
-            u_data['credit'] += amount
-            db_save_user(u_data)
-            await update.message.reply_text(f"✅ User {target_id} current balance: {u_data['credit']}", reply_markup=get_admin_keyboard())
-        else:
-            await update.message.reply_text("❌ User ID not found!", reply_markup=get_admin_keyboard())
-    except Exception as e:
-        await update.message.reply_text(f"❌ Error: {e}", reply_markup=get_admin_keyboard())
-    return ConversationHandler.END
+async def process_admin_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = update.message.text.strip()
+    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+        await update.message.reply_text("Search cancelled.", reply_markup=get_admin_keyboard())
+        return ConversationHandler.END
 
-async def start_block_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
-    await update.message.reply_text("🚫 Enter User ID to block/unblock:", reply_markup=cancel_keyboard())
-    return STEP_ADMIN_BLOCK_USER
-
-async def process_admin_block(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    target_id = update.message.text.strip()
-    u_data = db_get_user(target_id)
-    if u_data.get("is_blocked", 0) == 0:
-        u_data["is_blocked"] = 1
-        db_save_user(u_data)
-        await update.message.reply_text(f"🚫 User {target_id} has been blocked.", reply_markup=get_admin_keyboard())
+    u_data = db_get_user(txt)
+    if u_data:
+        is_b = "Yes 🚫" if u_data.get("is_blocked", 0) == 1 else "No ✅"
+        text = (
+            f"👤 **User Information**\n"
+            f"───────────────────\n"
+            f"🆔 **User ID:** `{u_data['user_id']}`\n"
+            f"💰 **Balance:** {u_data['credit']} Coins\n"
+            f"👥 **Referrals:** {u_data['ref_count']}\n"
+            f"📁 **Projects:** {len(u_data.get('projects', []))}\n"
+            f"🚫 **Blocked:** {is_b}\n"
+            f"───────────────────\n"
+            f"💡 To add/remove coins send: `{u_data['user_id']} Amount` (e.g. `{u_data['user_id']} 500`)"
+        )
+        await update.message.reply_text(text, reply_markup=get_admin_keyboard())
     else:
-        u_data["is_blocked"] = 0
-        db_save_user(u_data)
-        await update.message.reply_text(f"✅ User {target_id} has been unblocked.", reply_markup=get_admin_keyboard())
+        await update.message.reply_text("❌ User ID not found in database!", reply_markup=get_admin_keyboard())
     return ConversationHandler.END
 
 async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
-    await update.message.reply_text("📢 Send the message you want to broadcast:", reply_markup=cancel_keyboard())
+    await update.message.reply_text("📢 **Send SMS / Message to Broadcast:**", reply_markup=cancel_keyboard())
     return STEP_ADMIN_BROADCAST
 
 async def process_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg_text = update.message.text
+    if msg_text in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+        await update.message.reply_text("Broadcast cancelled.", reply_markup=get_admin_keyboard())
+        return ConversationHandler.END
+
     count = 0
     all_users = db_get_all_users()
     for uid in all_users:
         try:
-            await context.bot.send_message(chat_id=int(uid), text=f"📢 **Broadcast Notice:**\n\n{msg_text}")
+            await context.bot.send_message(chat_id=int(uid), text=f"📢 **Notice:**\n\n{msg_text}")
             count += 1
             await asyncio.sleep(0.05)
         except Exception: pass
-    await update.message.reply_text(f"🎉 Message sent to a total of {count} users!", reply_markup=get_admin_keyboard())
+    await update.message.reply_text(f"🎉 Message sent to {count} users!", reply_markup=get_admin_keyboard())
     return ConversationHandler.END
 
 # Menu Handlers
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     str_id = str(user_id)
-    text = update.message.text or ""
+    text = (update.message.text or "").strip()
     u_data = db_get_user(str_id)
 
-    if text and text.strip().lower() in ["admin", "অ্যাডমিন"]:
+    if text and text.lower() in ["admin", "অ্যাডমিন"]:
         return await admin_panel_command(update, context)
 
+    # Check for direct Admin Credit addition format: "USER_ID AMOUNT"
+    if user_id in ADMIN_IDS and len(text.split()) == 2:
+        parts = text.split()
+        if parts[0].isdigit() and (parts[1].isdigit() or (parts[1].startswith('-') and parts[1][1:].isdigit())):
+            target_id, amount = parts[0], int(parts[1])
+            target_u = db_get_user(target_id)
+            if target_u:
+                target_u['credit'] += amount
+                db_save_user(target_u)
+                await update.message.reply_text(f"✅ User `{target_id}` updated balance: {target_u['credit']} Coins", reply_markup=get_admin_keyboard())
+                return
+
     if user_id in ADMIN_IDS:
-        if text in ["📊 Bot Status", "📊 বট স্ট্যাটাস"]:
+        if text == "📊 Admin Dashboard":
             return await admin_panel_command(update, context)
-        elif text in ["📋 User List", "📋 ইউজার লিস্ট"]:
+        elif text == "👥 Users Report":
             all_u = db_get_all_users()
-            u_list = "📋 **User List:**\n───────────────────\n"
-            for uid, uinfo in list(all_u.items())[:15]:
-                u_list += f"🆔 `{uid}` | 💎 Coins: {uinfo.get('credit', 0)}\n"
+            u_list = "👥 **Users Report:**\n───────────────────\n"
+            for uid, uinfo in list(all_u.items())[:20]:
+                u_list += f"🆔 `{uid}` | 💰 Coins: {uinfo.get('credit', 0)}\n"
             return await update.message.reply_text(u_list, reply_markup=get_admin_keyboard())
-        elif text in ["🏠 Main Menu", "🏠 প্রধান মেনু"]:
+        elif text == "🏠 Main Menu":
             return await update.message.reply_text("🏠 Main Menu:", reply_markup=get_user_keyboard())
 
     if text == "👤 Profile":
@@ -957,9 +963,8 @@ if __name__ == '__main__':
     conv_handler = ConversationHandler(
         entry_points=[
             MessageHandler(filters.Regex("^⚙️ Setup$"), start_project),
-            MessageHandler(filters.Regex("^(💳 Credit Control|💳 ক্রেডিট কন্ট্রোল)$"), start_add_credit),
-            MessageHandler(filters.Regex("^(🚫 Block/Unblock User|🚫 ইউজার ব্লক/রিমুভ)$"), start_block_user),
-            MessageHandler(filters.Regex("^(📢 Broadcast All|📢 অল ইউজার ব্রডকাস্ট)$"), start_broadcast),
+            MessageHandler(filters.Regex("^👤 Search User$"), start_search_user),
+            MessageHandler(filters.Regex("^📢 Send SMS$"), start_broadcast),
             CallbackQueryHandler(project_action_callback, pattern="^(fe_|p_)")
         ],
         states={
@@ -973,8 +978,7 @@ if __name__ == '__main__':
                 CallbackQueryHandler(cancel_flow, pattern="^cancel_flow$")
             ],
             STEP_EDIT_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_value)],
-            STEP_ADMIN_ADD_CREDIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_credit)],
-            STEP_ADMIN_BLOCK_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_block)],
+            STEP_ADMIN_SEARCH_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_search_user)],
             STEP_ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_broadcast)]
         },
         fallbacks=[
@@ -988,7 +992,7 @@ if __name__ == '__main__':
     
     app.add_handler(channel_handler)
     app.add_handler(conv_handler)
-    app.add_handler(CallbackQueryHandler(project_action_callback, pattern="^(p_|fe_)\n"))
+    app.add_handler(CallbackQueryHandler(project_action_callback, pattern="^(p_|fe_)"))
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
