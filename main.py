@@ -52,7 +52,7 @@ ADMIN_IDS = [8454401183, 7871224176]
 ADMIN_USERNAME = "@SOYABUR_AS_LEADER"
 
 # 📢 Order Logs Channel
-LOG_CHANNEL = "@vucctx"
+LOG_CHANNEL = "@orderchannelsuperfast"
 
 # 🌐 Default SMM Panel Config
 SMM_API_URL = "https://1xpanel.com/api/v2"
