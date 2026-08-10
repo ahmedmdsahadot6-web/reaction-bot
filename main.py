@@ -234,6 +234,17 @@ def get_admin_keyboard():
         [KeyboardButton("👤 Search User"), KeyboardButton("🏠 Main Menu")]
     ], resize_keyboard=True)
 
+def get_admin_dashboard_keyboard():
+    return ReplyKeyboardMarkup([
+        [KeyboardButton("🤖 Bot Orders"), KeyboardButton("🌐 API Orders")],
+        [KeyboardButton("📋 All Orders")],
+        [KeyboardButton("💰 Telegram Super Service"), KeyboardButton("🧪 Services")],
+        [KeyboardButton("🔄 Replace OFF ❌"), KeyboardButton("♻️ Refill OFF ❌")],
+        [KeyboardButton("❌ Canceled"), KeyboardButton("⚠️ Failed/Partial")],
+        [KeyboardButton("💡 Coin Rate Settings"), KeyboardButton("👥 Referral Settings")],
+        [KeyboardButton("🏠 Main Menu")]
+    ], resize_keyboard=True)
+
 def cancel_keyboard():
     return ReplyKeyboardMarkup([[KeyboardButton("❌ Cancel")]], resize_keyboard=True)
 
@@ -252,7 +263,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         referrer_id = context.args[0]
         ref_data = db_get_user(referrer_id)
         if referrer_id != str_id and ref_data:
-            # Check if this user is new
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM users WHERE user_id = ?", (str_id,))
@@ -282,7 +292,7 @@ async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     blocked_count = sum(1 for u in all_users.values() if u.get("is_blocked", 0) == 1)
 
     text = (
-        f"📊 **ADMIN DASHBOARD**\n"
+        f"📊 **ADMIN PANEL**\n"
         f"───────────────────\n"
         f"👥 Total Users: {len(all_users)}\n"
         f"🚫 Blocked Users: {blocked_count}\n"
@@ -716,7 +726,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
     if not msg or not msg.chat:
         return
 
-    # Handle media groups (album posts) to process only ONCE per post/album
     media_group_id = msg.media_group_id
     if media_group_id:
         if media_group_id in PROCESSED_MEDIA_GROUPS:
@@ -820,7 +829,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             except Exception as e:
                 logger.error(f"Failed to send order fail alert: {e}")
 
-# 👑 Admin New Features
+# 👑 Admin Handlers
 async def start_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
     await update.message.reply_text("👤 **Enter User ID to Search:**", reply_markup=cancel_keyboard())
@@ -895,18 +904,27 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(f"✅ User `{target_id}` updated balance: {target_u['credit']} Coins", reply_markup=get_admin_keyboard())
                 return
 
+    # 👑 Admin Actions
     if user_id in ADMIN_IDS:
         if text == "📊 Admin Dashboard":
-            return await admin_panel_command(update, context)
+            return await update.message.reply_text("📊 **Admin Dashboard Settings:**", reply_markup=get_admin_dashboard_keyboard())
+        
+        elif text in ["🤖 Bot Orders", "🌐 API Orders", "📋 All Orders", "💰 Telegram Super Service", 
+                      "🧪 Services", "🔄 Replace OFF ❌", "♻️ Refill OFF ❌", "❌ Canceled", 
+                      "⚠️ Failed/Partial", "💡 Coin Rate Settings", "👥 Referral Settings"]:
+            return await update.message.reply_text(f"⚙️ **{text}** option selected.", reply_markup=get_admin_dashboard_keyboard())
+
         elif text == "👥 Users Report":
             all_u = db_get_all_users()
             u_list = "👥 **Users Report:**\n───────────────────\n"
             for uid, uinfo in list(all_u.items())[:20]:
                 u_list += f"🆔 `{uid}` | 💰 Coins: {uinfo.get('credit', 0)}\n"
             return await update.message.reply_text(u_list, reply_markup=get_admin_keyboard())
+
         elif text == "🏠 Main Menu":
             return await update.message.reply_text("🏠 Main Menu:", reply_markup=get_user_keyboard())
 
+    # 👤 Regular User Actions
     if text == "👤 Profile":
         profile_text = (
             f"👤 **User Profile**\n───────────────────\n"
