@@ -65,6 +65,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Cache for preventing duplicate album/media group processing
+PROCESSED_MEDIA_GROUPS = set()
+
 # 🗄️ Permanent SQLite Database Manager
 def init_db():
     conn = sqlite3.connect(DB_FILE)
@@ -713,6 +716,20 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
     if not msg or not msg.chat:
         return
 
+    # Handle media groups (album posts) to process only ONCE per post/album
+    media_group_id = msg.media_group_id
+    if media_group_id:
+        if media_group_id in PROCESSED_MEDIA_GROUPS:
+            logger.info(f"⏩ Media group {media_group_id} already processed. Skipping duplicate image.")
+            return
+        PROCESSED_MEDIA_GROUPS.add(media_group_id)
+        # Prevent memory leaks by capping set size
+        if len(PROCESSED_MEDIA_GROUPS) > 1000:
+            PROCESSED_MEDIA_GROUPS.clear()
+        
+        # Small delay to let all album items arrive
+        await asyncio.sleep(2)
+
     raw_channel_id = str(msg.chat.id)
     chat_username = (msg.chat.username or "").lower()
     post_id = msg.message_id
@@ -971,7 +988,7 @@ if __name__ == '__main__':
     
     app.add_handler(channel_handler)
     app.add_handler(conv_handler)
-    app.add_handler(CallbackQueryHandler(project_action_callback, pattern="^(p_|fe_)"))
+    app.add_handler(CallbackQueryHandler(project_action_callback, pattern="^(p_|fe_)\n"))
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
