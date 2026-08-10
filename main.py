@@ -45,8 +45,8 @@ def keep_alive():
     t_ping.start()
 
 # 🔑 Configuration
-BOT_TOKEN = "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw"
-BOT_USERNAME = "@Sahadot_reaction123_bot"
+BOT_TOKEN = "8320025447:AAFWnP_asWXs6WXS-h_gPAy6Baikd6-4jMc"
+BOT_USERNAME = "TGSUPER_SERVICE_BOT"
 ADMIN_IDS = [8454401183, 7871224176]
 ADMIN_USERNAME = "@SOYABUR_AS_LEADER"
 
@@ -122,7 +122,7 @@ def send_smm_order(link, quantity):
         logger.error(f"SMM API Error: {e}")
         return {"error": str(e)}
 
-# 📱 Keyboards (Matching the user screenshot layout)
+# 📱 Keyboards
 def get_user_keyboard():
     kb = [
         [KeyboardButton("⚙️ Setup"), KeyboardButton("👤 Profile")],
@@ -555,7 +555,7 @@ async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return ConversationHandler.END
 
-# 📂 Display Projects via "📋 Order List"
+# 📂 Display Projects function (Used for Settings / Project Management)
 async def show_my_projects(message_obj, user_id):
     u_data = get_user_data(user_id)
     projects = u_data.get('projects', [])
@@ -572,7 +572,7 @@ async def show_my_projects(message_obj, user_id):
             [InlineKeyboardButton(btn_st_text, callback_data=f"p_toggle_{idx}"), InlineKeyboardButton("✏️ Edit", callback_data=f"p_edit_{idx}")]
         ]
         p_text = (
-            f"📁 **Project #{idx+1}: {p.get('channel_name', 'Channel')}**\n"
+            f"🛠️ **Project Settings #{idx+1}: {p.get('channel_name', 'Channel')}**\n"
             f"───────────────────\n"
             f"🔗 Link: {p.get('target_url')}\n"
             f"⚙️ Status: **{st}**\n"
@@ -765,9 +765,8 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(profile_text)
 
     elif text == "🛠️ Settings":
-        clean_admin = ADMIN_USERNAME.replace("@", "")
-        inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 Contact Support", url=f"https://t.me/{clean_admin}")]])
-        await update.message.reply_text("🛠️ **Settings & Configurations:**\n\nFor custom settings or assistance, contact support.", reply_markup=inline_kb)
+        # 🛠️ Settings অপশনে প্রজেক্ট সেটিংস ও কনফিগারেশন যোগ করে দেওয়া হয়েছে
+        await show_my_projects(update.message, str_id)
 
     elif text == "💰 Top-up":
         clean_admin = ADMIN_USERNAME.replace("@", "")
