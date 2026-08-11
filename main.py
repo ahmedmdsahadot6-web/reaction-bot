@@ -678,24 +678,25 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg_text, reply_markup=get_user_keyboard())
     return ConversationHandler.END
 
-# 💰 Top-up Flow Logic (Updated for Dollar Rate)
+# 💰 Top-up Flow Logic (With Binance Pay ID)
 async def start_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = db_get_user(user_id)
-    clean_admin = ADMIN_USERNAME.replace("@", "")
     
+    binance_pay_id = "839892941"
     dollar_rate = db_get_setting("dollar_rate", "1000")
     context.user_data['topup_data'] = {}
     
     text = (
         f"💎 **আপনার বর্তমান ব্যালেন্স:** {u_data['credit']} coins\n"
         f"💵 **রেট:** $1 = {dollar_rate} Coins\n\n"
+        f"🟡 **Binance Pay ID:** `{binance_pay_id}`\n\n"
         f"💳 **টপ-আপ করার নিয়ম:**\n"
-        f"১) এডমিনের সাথে কথা বলে পেমেন্ট করুন: @{clean_admin}\n"
-        f"২) পেমেন্ট শেষে নিচে আবেদনের তথ্য জমা দিন।\n\n"
-        f"👉 **ধাপ ১:** কত ডলার ডিপোজিট করতে চান তা লিখুন (যেমন: `1`, `5`, `10`):"
+        f"১) উপরে দেওয়া Binance Pay ID তে ডলার সেন্ড করুন।\n"
+        f"২) সেন্ড করার পর নিচে ডলারের পরিমাণ, Order ID/TxID এবং স্ক্রিনশট জমা দিন।\n\n"
+        f"👉 **ধাপ ১:** কত ডলার ডিপোজিট করেছেন তা লিখুন (যেমন: `1`, `5`, `10`):"
     )
-    await update.message.reply_text(text, reply_markup=cancel_keyboard())
+    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=cancel_keyboard())
     return STEP_TOPUP_AMOUNT
 
 async def save_topup_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -721,7 +722,7 @@ async def save_topup_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         f"💰 **আপনার ডিপোজিট:** ${usd_val} = **{calc_coins} Coins**\n\n"
-        f"👉 **ধাপ ২:** আপনার পেমেন্টের **Transaction ID (TxID)** টি লিখে পাঠান:",
+        f"👉 **ধাপ ২:** আপনার পেমেন্টের **Transaction ID / Order ID** টি লিখে পাঠান:",
         reply_markup=cancel_keyboard()
     )
     return STEP_TOPUP_TXID
