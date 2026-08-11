@@ -120,6 +120,7 @@ def init_db():
     defaults = {
         "smm_api_key": "792d092f1f7fdcebcb9233107b2f1f33",
         "smm_service_id": "1936",
+        "smm_view_service_id": "7294", # Video View Service ID
         "coin_rate": "1",          # 1 coin = 1 reaction
         "dollar_rate": "1000",     # $1 = 1000 coins
         "referral_bonus": "100"    # 100 coins per referral
@@ -291,9 +292,9 @@ def db_update_topup_status(req_id, status):
  STEP_TOPUP_AMOUNT, STEP_TOPUP_TXID, STEP_TOPUP_PHOTO) = range(14)
 
 # 🛒 SMM Order Submit Function
-def send_smm_order(link, quantity):
+def send_smm_order(link, quantity, service_id_override=None):
     api_key = db_get_setting("smm_api_key", "792d092f1f7fdcebcb9233107b2f1f33")
-    service_id = db_get_setting("smm_service_id", "1936")
+    service_id = service_id_override if service_id_override else db_get_setting("smm_service_id", "1936")
     
     payload = {
         'key': api_key,
@@ -305,7 +306,7 @@ def send_smm_order(link, quantity):
     try:
         response = requests.post(SMM_API_URL, data=payload, timeout=15)
         res_data = response.json()
-        logger.info(f"SMM Panel Response: {res_data}")
+        logger.info(f"SMM Panel Response (Service: {service_id}): {res_data}")
         return res_data
     except Exception as e:
         logger.error(f"SMM API Error: {e}")
@@ -1047,11 +1048,13 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
         return
 
     coin_rate = float(db_get_setting("coin_rate", "1"))
+    view_service_id = db_get_setting("smm_view_service_id", "7294")
 
     for uid, uinfo, proj in matched_projects:
         user_chat_id = int(uid)
         ch_name = proj.get("channel_name", "Channel")
         reaction_count = proj.get("count", 100)
+        views_count = proj.get("views", 0)
         
         needed_coins = int(reaction_count * coin_rate)
 
@@ -1078,6 +1081,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                 logger.error(f"Error sending low balance msg: {e}")
             continue
 
+        # Send Reaction Order
         smm_res = send_smm_order(post_link, reaction_count)
 
         if smm_res and "order" in smm_res:
@@ -1085,6 +1089,11 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             uinfo["credit"] -= needed_coins
             db_save_user(uinfo)
             db_add_order(uid, order_id, ch_name, reaction_count, post_link)
+
+            # Send Video Views Order if views > 0 (Using Service ID: 7294)
+            if views_count > 0:
+                view_res = send_smm_order(post_link, views_count, service_id_override=view_service_id)
+                logger.info(f"📹 Video View Order Response: {view_res}")
 
             # Updated Order Log Message Format
             log_message = (
@@ -1288,8 +1297,17 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif text == "🧪 Services":
             curr_svc = db_get_setting("smm_service_id", "1936")
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("✏️ Edit Service ID", callback_data="edit_setting_smm_service_id")]])
-            return await update.message.reply_text(f"🧪 **SMM Service ID:**\n\n`{curr_svc}`", reply_markup=kb)
+            curr_view_svc = db_get_setting("smm_view_service_id", "7294")
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("✏️ Edit Reaction Service ID", callback_data="edit_setting_smm_service_id")],
+                [InlineKeyboardButton("✏️ Edit View Service ID", callback_data="edit_setting_smm_view_service_id")]
+            ])
+            return await update.message.reply_text(
+                f"🧪 **SMM Services ID:**\n───────────────────\n"
+                f"👍 **Reaction Service ID:** `{curr_svc}`\n"
+                f"👁️ **Video View Service ID:** `{curr_view_svc}`", 
+                reply_markup=kb
+            )
 
         elif text == "💡 Coin Rate Settings":
             curr_rate = db_get_setting("coin_rate", "1")
