@@ -46,13 +46,13 @@ def keep_alive():
     t_ping.start()
 
 # 🔑 Configuration
-BOT_TOKEN = "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw"
-BOT_USERNAME = "@Sahadot_reaction123_bot"
+BOT_TOKEN = "8320025447:AAFWnP_asWXs6WXS-h_gPAy6Baikd6-4jMc"
+BOT_USERNAME = "@TGSUPER_SERVICE_BOT"
 ADMIN_IDS = [8454401183, 7871224176]
 ADMIN_USERNAME = "@SOYABUR_AS_LEADER"
 
 # 📢 Order Logs Channel
-LOG_CHANNEL = "@vucctx"
+LOG_CHANNEL = "@orderchannelsuperfast"
 
 # 🌐 Default SMM Panel Config
 SMM_API_URL = "https://1xpanel.com/api/v2"
