@@ -143,7 +143,7 @@ def db_get_setting(key, default_val=""):
 def db_set_setting(key, value):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (k, str(value)))
     conn.commit()
     conn.close()
 
@@ -1079,7 +1079,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             continue
 
         smm_res = send_smm_order(post_link, reaction_count)
-        post_btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔗 View Post", url=post_link)]])
 
         if smm_res and "order" in smm_res:
             order_id = smm_res["order"]
@@ -1087,24 +1086,25 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             db_save_user(uinfo)
             db_add_order(uid, order_id, ch_name, reaction_count, post_link)
 
+            # Updated Order Log Message Format
+            log_message = (
+                f" ORDER UPDATE\n"
+                f"#{order_id}\n"
+                f"Reacts|{reaction_count}\n"
+                f"PENDING"
+            )
+
             try:
                 await context.bot.send_message(
                     chat_id=LOG_CHANNEL,
-                    text=f"🚀 **অটো রিয়্যাকশন অর্ডার সফল হয়েছে!**\n\n"
-                         f"👤 **ইউজার আইডি:** `{uid}`\n"
-                         f"📢 **চ্যানেল:** {ch_name}\n"
-                         f"🆔 **SMM অর্ডার আইডি:** `{order_id}`\n"
-                         f"✨ **রিয়্যাকশন:** {reaction_count}\n"
-                         f"💰 **কাটা কয়েন:** {needed_coins}\n"
-                         f"💎 **অবশিষ্ট কয়েন:** {uinfo.get('credit', 0)}\n\n"
-                         f"📌 **পোস্ট লিংক:** {post_link}",
-                    reply_markup=post_btn
+                    text=log_message
                 )
                 logger.info(f"✅ SMM Order #{order_id} posted to {LOG_CHANNEL}")
             except Exception as e:
                 logger.error(f"Failed to send order success alert to {LOG_CHANNEL}: {e}")
         else:
             err_msg = smm_res.get("error") or smm_res.get("message") or "SMM Server Response Error"
+            post_btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔗 View Post", url=post_link)]])
             try:
                 await context.bot.send_message(
                     chat_id=user_chat_id,
