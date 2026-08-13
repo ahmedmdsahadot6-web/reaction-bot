@@ -388,9 +388,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 db_save_user(ref_data)
 
     await update.message.reply_text(
-        f"👋 স্বাগতম {user.first_name}!\n\n"
-        f"🚀 **মাল্টি-রিয়্যাকশন SMM ইঞ্জিন সক্রিয় আছে**\n"
-        f"আপনার চ্যানেলের রিয়্যাকশন অটোমেশন সেটআপ এবং পরিচালনা করতে নিচের মেনু অপশনগুলো ব্যবহার করুন।",
+        "👋 স্বাগতম!\n"
+        "Telegram Super Service\n\n"
+        "📢 https://t.me/orderchannelsuperfast",
         reply_markup=get_user_keyboard()
     )
 
@@ -561,10 +561,10 @@ async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def render_views_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     text = (
-        f"👁️ **ধাপ ৫ •  ভিউ সিলেকশন**\n"
+        f"👁️ **ধাপ ৫ • ভিডিও ভিউ সিলেকশন**\n"
         f"───────────────────\n"
-        f"👉 বর্তমান  ভিউ: **{draft.get('views', 0)}**\n"
-        f"(কোন পোস্ট করা মাত্রই অটোমেটিক ভিউ যোগ হবে)"
+        f"👉 বর্তমান ভিডিও ভিউ: **{draft.get('views', 0)}**\n"
+        f"(কোন ভিডিও পোস্ট করা মাত্রই অটোমেটিক ভিউ যোগ হবে)"
     )
     keyboard = [
         [InlineKeyboardButton("0 (OFF)", callback_data="vw_0"), InlineKeyboardButton("10", callback_data="vw_10"), InlineKeyboardButton("20", callback_data="vw_20"), InlineKeyboardButton("30", callback_data="vw_30")],
@@ -599,7 +599,7 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"⚙️ ডিস্ট্রিবিউশন ধরন: {draft.get('distribution')}\n"
         f"⚡ ডেলিভারি স্পিড: {draft.get('speed')}\n"
         f"🚀 রিয়্যাকশন সংখ্যা: {draft.get('count')}\n"
-        f"👁️  ভিউ: {draft.get('views')}\n\n"
+        f"👁️ ভিডিও ভিউ: {draft.get('views')}\n\n"
         f"সবকিছু ঠিক থাকলে '✅ Create Project' বাটনে ক্লিক করুন।"
     )
     keyboard = [
@@ -661,7 +661,7 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🆔 চ্যানেল আইডি: `{channel_id}`\n"
         f"⚙️ স্ট্যাটাস: {draft.get('status', 'ON')}\n"
         f"🚀 রিয়্যাকশন সংখ্যা: {draft['count']}\n"
-        f"👁️  ভিউ: {draft['views']}\n\n"
+        f"👁️ ভিডিও ভিউ: {draft['views']}\n\n"
         f"✅ প্রজেক্ট চালু হয়েছে! এখন থেকে পোস্ট করা মাত্রই অটোমেটিক রিয়্যাকশন চলে যাবে।",
         reply_markup=get_user_keyboard()
     )
@@ -891,7 +891,7 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
         prompt_messages = {
             "channel": "✍️ **নতুন চ্যানেলের লিংক পাঠান:**\n(যেমন: `https://t.me/your_channel`) \n\n⚠️ নিশ্চিত করুন বটটি নতুন চ্যানেলে অ্যাডমিন আছে!",
             "count": "✍️ **নতুন রিয়্যাকশন সংখ্যা পাঠান:**\n(যেমন: `100`, `200`, `500`)",
-            "views": "✍️ **নতুন  ভিউ সংখ্যা পাঠান:**\n(যেমন: `0`, `100`, `500`)"
+            "views": "✍️ **নতুন ভিডিও ভিউ সংখ্যা পাঠান:**\n(যেমন: `0`, `100`, `500`)"
         }
         
         msg_to_send = prompt_messages.get(field, "✍️ **নতুন মান লিখে পাঠান:**")
