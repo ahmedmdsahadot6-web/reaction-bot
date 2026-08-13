@@ -5,6 +5,7 @@ import re
 import asyncio
 import sqlite3
 import requests
+import time
 from datetime import datetime
 from threading import Thread
 from flask import Flask
@@ -26,7 +27,7 @@ def ping_self():
     render_url = os.environ.get("RENDER_EXTERNAL_URL", "https://reaction-bot-7d1u.onrender.com")
     while True:
         try:
-            asyncio.run(asyncio.sleep(280)) # Ping every 4 mins 50 secs
+            time.sleep(280) # Ping every 4 mins 50 secs
             requests.get(render_url, timeout=10)
             logger.info("📡 Keeping bot server active 24/7...")
         except Exception as e:
@@ -46,7 +47,7 @@ def keep_alive():
     t_ping.start()
 
 # 🔑 Configuration
-BOT_TOKEN = "8320025447:AAFWnP_asWXs6WXS-h_gPAy6Baikd6-4jMc"
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8320025447:AAFWnP_asWXs6WXS-h_gPAy6Baikd6-4jMc")
 BOT_USERNAME = "@TGSUPER_SERVICE_BOT"
 ADMIN_IDS = [8454401183, 7871224176]
 ADMIN_USERNAME = "@SOYABUR_AS_LEADER"
@@ -139,7 +140,7 @@ def init_db():
     defaults = {
         "smm_api_key": "792d092f1f7fdcebcb9233107b2f1f33",
         "smm_service_id": "1936",
-        "smm_view_service_id": "7294", # Video View Service ID
+        "smm_view_service_id": "7294", #  View Service ID
         "coin_rate": "1",          # 1 coin = 1 reaction
         "dollar_rate": "1000",     # $1 = 1000 coins
         "referral_bonus": "100"    # 100 coins per referral
@@ -405,17 +406,6 @@ def get_admin_keyboard():
         [KeyboardButton("👤 Search User"), KeyboardButton("🏠 Main Menu")]
     ], resize_keyboard=True)
 
-def get_admin_dashboard_keyboard():
-    return ReplyKeyboardMarkup([
-        [KeyboardButton("🤖 Bot Orders"), KeyboardButton("🌐 API Orders")],
-        [KeyboardButton("💳 Panel Balance"), KeyboardButton("📋 All Orders")],
-        [KeyboardButton("💰 Telegram Super Service"), KeyboardButton("🧪 Services")],
-        [KeyboardButton("🔄 Replace OFF ❌"), KeyboardButton("♻️ Refill OFF ❌")],
-        [KeyboardButton("❌ Canceled"), KeyboardButton("⚠️ Failed/Partial")],
-        [KeyboardButton("💡 Coin Rate Settings"), KeyboardButton("👥 Referral Settings")],
-        [KeyboardButton("🏠 Main Menu")]
-    ], resize_keyboard=True)
-
 def cancel_keyboard():
     return ReplyKeyboardMarkup([[KeyboardButton("❌ Cancel")]], resize_keyboard=True)
 
@@ -560,14 +550,14 @@ async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft['count'] = int(query.data.split("_")[1])
     return await render_count_menu(update, context)
 
-# 👁️ Step 3 • Video Views Count
+# 👁️ Step 3 •  Views Count
 async def render_views_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     text = (
-        f"👁️ **ধাপ ৩ • ভিডিও ভিউ সিলেকশন**\n"
+        f"👁️ **ধাপ ৩ •  ভিউ সিলেকশন**\n"
         f"───────────────────\n"
-        f"👉 বর্তমান ভিডিও ভিউ: **{draft.get('views', 0)}**\n"
-        f"(কোন ভিডিও পোস্ট করা মাত্রই অটোমেটিক ভিউ যোগ হবে)"
+        f"👉 বর্তমান  ভিউ: **{draft.get('views', 0)}**\n"
+        f"(কোন  পোস্ট করা মাত্রই অটোমেটিক ভিউ যোগ হবে)"
     )
     keyboard = [
         [InlineKeyboardButton("0 (OFF)", callback_data="vw_0"), InlineKeyboardButton("10", callback_data="vw_10"), InlineKeyboardButton("20", callback_data="vw_20"), InlineKeyboardButton("30", callback_data="vw_30")],
@@ -601,7 +591,7 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"👁️ ভিউ অপশন: {draft.get('view_status', 'ON')}\n"
         f"😊 রিয়্যাকশন ইমোজি: {draft.get('emojis')}\n"
         f"🚀 রিয়্যাকশন সংখ্যা: {draft.get('count')}\n"
-        f"👁️ ভিডিও ভিউ: {draft.get('views')}\n\n"
+        f"👁️  ভিউ: {draft.get('views')}\n\n"
         f"সবকিছু ঠিক থাকলে '✅ Create Project' বাটনে ক্লিক করুন।"
     )
     keyboard = [
@@ -664,7 +654,7 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👍 রিয়্যাকশন: {draft.get('react_status', 'ON')}\n"
         f"👁️ ভিউ: {draft.get('view_status', 'ON')}\n"
         f"🚀 রিয়্যাকশন সংখ্যা: {draft['count']}\n"
-        f"👁️ ভিডিও ভিউ: {draft['views']}\n\n"
+        f"👁️  ভিউ: {draft['views']}\n\n"
         f"✅ প্রজেক্ট চালু হয়েছে! এখন থেকে পোস্ট করা মাত্রই অটোমেটিক সার্ভিস চালু হয়ে যাবে।",
         reply_markup=get_user_keyboard()
     )
@@ -881,7 +871,7 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
         prompt_messages = {
             "channel": "✍️ **নতুন চ্যানেলের লিংক পাঠান:**\n(যেমন: `https://t.me/your_channel`) \n\n⚠️ নিশ্চিত করুন বটটি নতুন চ্যানেলে অ্যাডমিন আছে!",
             "count": "✍️ **নতুন রিয়্যাকশন সংখ্যা পাঠান:**\n(যেমন: `100`, `200`, `500`)",
-            "views": "✍️ **নতুন ভিডিও ভিউ সংখ্যা পাঠান:**\n(যেমন: `0`, `100`, `500`)"
+            "views": "✍️ **নতুন  ভিউ সংখ্যা পাঠান:**\n(যেমন: `0`, `100`, `500`)"
         }
         
         msg_to_send = prompt_messages.get(field, "✍️ **নতুন মান লিখে পাঠান:**")
@@ -972,7 +962,7 @@ async def show_my_projects(message_obj, user_id):
             f"───────────────────\n"
             f"🔗 লিংক: {p.get('target_url')}\n"
             f"👍 রিয়্যাকশন সার্ভিস: **{r_st}**\n"
-            f"👁️ ভিডিও ভিউ সার্ভিস: **{v_st}**\n"
+            f"👁️  ভিউ সার্ভিস: **{v_st}**\n"
             f"🚀 রিয়্যাকশন সংখ্যা: **{p.get('count', 100)}**\n"
             f"👁️ ভিউ সংখ্যা: **{p.get('views', 0)}**\n"
             f"😊 ইমোজি: **{p.get('emojis', 'POSITIVE')}**"
@@ -1118,10 +1108,10 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                 except Exception as e:
                     logger.error(f"Failed to send order fail alert: {e}")
 
-        # Send Video Views Order if Views is ON & views_count > 0
+        # Send  Views Order if Views is ON & views_count > 0
         if view_status == "ON" and views_count > 0:
             view_res = send_smm_order(post_link, views_count, service_id_override=view_service_id)
-            logger.info(f"📹 Video View Order Response: {view_res}")
+            logger.info(f"📹  View Order Response: {view_res}")
             if view_res and "order" in view_res:
                 db_add_order(uid, view_res["order"], ch_name, views_count, post_link, order_type="Views", status="completed")
 
@@ -1338,18 +1328,139 @@ async def process_admin_edit_setting(update: Update, context: ContextTypes.DEFAU
     txt = update.message.text.strip()
     if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
         context.user_data.pop('admin_edit_key', None)
-        await update.message.reply_text("এডিট বাতিল করা হয়েছে।", reply_markup=get_admin_dashboard_keyboard())
+        await update.message.reply_text("এডিট বাতিল করা হয়েছে।", reply_markup=get_admin_keyboard())
         return ConversationHandler.END
 
     key = context.user_data.get('admin_edit_key')
     if not key:
-        await update.message.reply_text("❌ কিছু ভুল হয়েছে!", reply_markup=get_admin_dashboard_keyboard())
+        await update.message.reply_text("❌ কিছু ভুল হয়েছে!", reply_markup=get_admin_keyboard())
         return ConversationHandler.END
 
     db_set_setting(key, txt)
     context.user_data.pop('admin_edit_key', None)
-    await update.message.reply_text(f"🎉 **{key.upper()} সফলভাবে আপডেট করা হয়েছে:** `{txt}`", reply_markup=get_admin_dashboard_keyboard())
+    await update.message.reply_text(f"🎉 **{key.upper()} সফলভাবে আপডেট করা হয়েছে:** `{txt}`", reply_markup=get_admin_keyboard())
     return ConversationHandler.END
+
+# 🎛️ Admin Dashboard Inline Callbacks Handler
+async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if query.from_user.id not in ADMIN_IDS:
+        return
+
+    data = query.data
+
+    if data == "dash_bot_orders":
+        bot_orders = db_get_all_bot_orders(50)
+        if not bot_orders:
+            return await query.message.reply_text("🤖 **Bot Orders**\n\n❌ কোন অর্ডার পাওয়া যায়নি।")
+        
+        res_text = "Bot Orders\n\n"
+        for order in bot_orders:
+            oid, otype, ostatus = order
+            res_text += f"#{oid}|{otype}|{ostatus}\n"
+        
+        return await query.message.reply_text(res_text)
+
+    elif data == "dash_api_orders":
+        curr_key = db_get_setting("smm_api_key", "792d092f1f7fdcebcb9233107b2f1f33")
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("✏️ Edit API Key", callback_data="edit_setting_smm_api_key")]])
+        return await query.message.reply_text(f"🌐 **SMM Panel API Key:**\n\n`{curr_key}`", reply_markup=kb)
+
+    elif data == "dash_panel_balance":
+        bal_res = get_smm_balance()
+        if bal_res and "balance" in bal_res:
+            bal = bal_res.get("balance", "0")
+            currency = bal_res.get("currency", "USD")
+            await query.message.reply_text(
+                f"💳 **SMM Panel Balance:**\n───────────────────\n"
+                f"💰 Current Balance: **{bal} {currency}**"
+            )
+        else:
+            err = bal_res.get("error") or bal_res.get("message") or "Unknown error"
+            await query.message.reply_text(
+                f"❌ **Panel Balance Fetch Failed!**\n\nReason: `{err}`"
+            )
+        return
+
+    elif data == "dash_all_orders":
+        pending_topups = db_get_pending_topups()
+        if not pending_topups:
+            return await query.message.reply_text("📋 **সকল পেমেন্ট আবেদন**\n───────────────────\n❌ বর্তমানে কোনো পেন্ডিং টপ-আপ আবেদন নেই।")
+        
+        await query.message.reply_text(f"📋 **মোট {len(pending_topups)} টি পেন্ডিং টপ-আপ আবেদন রয়েছে:**")
+        
+        for req in pending_topups:
+            rid, uid, txid, photo_id, amount, created_at = req
+            caption_text = (
+                f"💳 **পেন্ডিং টপ-আপ আবেদন #{rid}**\n"
+                f"───────────────────\n"
+                f"👤 **ইউজার আইডি:** `{uid}`\n"
+                f"💰 **আবেদনের কয়েন:** {amount}\n"
+                f"📅 **তারিখ:** {created_at}"
+            )
+            kb = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("✅ Approve", callback_data=f"topup_approve_{rid}"),
+                    InlineKeyboardButton("❌ Reject", callback_data=f"topup_reject_{rid}")
+                ]
+            ])
+            try:
+                await query.message.reply_photo(photo=photo_id, caption=caption_text, reply_markup=kb)
+            except Exception as e:
+                await query.message.reply_text(f"{caption_text}\n\n⚠️ ছবি দেখতে সমস্যা হচ্ছে।", reply_markup=kb)
+        return
+
+    elif data == "dash_services":
+        curr_svc = db_get_setting("smm_service_id", "1936")
+        curr_view_svc = db_get_setting("smm_view_service_id", "7294")
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✏️ Edit Reaction Service ID", callback_data="edit_setting_smm_service_id")],
+            [InlineKeyboardButton("✏️ Edit View Service ID", callback_data="edit_setting_smm_view_service_id")]
+        ])
+        return await query.message.reply_text(
+            f"🧪 **SMM Services ID:**\n───────────────────\n"
+            f"👍 **Reaction Service ID:** `{curr_svc}`\n"
+            f"👁️ ** View Service ID:** `{curr_view_svc}`", 
+            reply_markup=kb
+        )
+
+    elif data == "dash_coin_rate":
+        curr_rate = db_get_setting("coin_rate", "1")
+        curr_dollar = db_get_setting("dollar_rate", "1000")
+        
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✏️ Edit Reaction Coin Rate", callback_data="edit_setting_coin_rate")],
+            [InlineKeyboardButton("✏️ Edit Dollar Rate ($1 = ? Coins)", callback_data="edit_setting_dollar_rate")]
+        ])
+        return await query.message.reply_text(
+            f"💡 **কয়েন রেট সেটিংস:**\n───────────────────\n"
+            f"📌 প্রতি রিয়্যাকশনে কয়েন: **{curr_rate} Coins**\n"
+            f"💵 ডলারে কয়েন রেট: **$1 = {curr_dollar} Coins**\n\n"
+            f"যেকোনো রেট পরিবর্তন করতে নিচের অপশন বেছে নিন:", 
+            reply_markup=kb
+        )
+
+    elif data == "dash_referral_settings":
+        curr_ref = db_get_setting("referral_bonus", "100")
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("✏️ Edit Ref Bonus", callback_data="edit_setting_referral_bonus")]])
+        return await query.message.reply_text(
+            f"👥 **রেফারেল সেটিংস:**\n───────────────────\n"
+            f"বর্তমান বোনাস: **প্রতি রেফারে {curr_ref} কয়েন**\n\n"
+            f"রেফারেল বোনাস কয়েন পরিবর্তন করতে নিচের বাটনে ক্লিক করুন।", 
+            reply_markup=kb
+        )
+
+    elif data in ["dash_tg_super_service", "dash_replace_off", "dash_refill_off", "dash_canceled", "dash_failed_partial"]:
+        option_names = {
+            "dash_tg_super_service": "💰 Telegram Super Service",
+            "dash_replace_off": "🔄 Replace OFF ❌",
+            "dash_refill_off": "♻️ Refill OFF ❌",
+            "dash_canceled": "❌ Canceled",
+            "dash_failed_partial": "⚠️ Failed/Partial"
+        }
+        name = option_names.get(data, "Option")
+        return await query.message.reply_text(f"⚙️ **{name}** অপশনটি সিলেক্ট করা হয়েছে।")
 
 # Menu Handlers
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1378,115 +1489,18 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 👑 Admin Actions
     if user_id in ADMIN_IDS:
         if text == "📊 Admin Dashboard":
-            return await update.message.reply_text("📊 **অ্যাডমিন ড্যাশবোর্ড সেটিংস:**", reply_markup=get_admin_dashboard_keyboard())
-        
-        elif text == "🤖 Bot Orders":
-            bot_orders = db_get_all_bot_orders(50)
-            if not bot_orders:
-                return await update.message.reply_text("🤖 **Bot Orders**\n\n❌ কোন অর্ডার পাওয়া যায়নি।", reply_markup=get_admin_dashboard_keyboard())
-            
-            res_text = "Bot Orders\n\n"
-            for order in bot_orders:
-                oid, otype, ostatus = order
-                res_text += f"#{oid}|{otype}|{ostatus}\n"
-            
-            return await update.message.reply_text(res_text, reply_markup=get_admin_dashboard_keyboard())
-
-        elif text == "📋 All Orders":
-            pending_topups = db_get_pending_topups()
-            if not pending_topups:
-                return await update.message.reply_text("📋 **সকল পেমেন্ট আবেদন**\n───────────────────\n❌ বর্তমানে কোনো পেন্ডিং টপ-আপ আবেদন নেই।", reply_markup=get_admin_dashboard_keyboard())
-            
-            await update.message.reply_text(f"📋 **মোট {len(pending_topups)} টি পেন্ডিং টপ-আপ আবেদন রয়েছে:**")
-            
-            for req in pending_topups:
-                rid, uid, txid, photo_id, amount, created_at = req
-                caption_text = (
-                    f"💳 **পেন্ডিং টপ-আপ আবেদন #{rid}**\n"
-                    f"───────────────────\n"
-                    f"👤 **ইউজার আইডি:** `{uid}`\n"
-                    f"💰 **আবেদনের কয়েন:** {amount}\n"
-                    f"📅 **তারিখ:** {created_at}"
-                )
-                kb = InlineKeyboardMarkup([
-                    [
-                        InlineKeyboardButton("✅ Approve", callback_data=f"topup_approve_{rid}"),
-                        InlineKeyboardButton("❌ Reject", callback_data=f"topup_reject_{rid}")
-                    ]
-                ])
-                try:
-                    await update.message.reply_photo(photo=photo_id, caption=caption_text, reply_markup=kb)
-                except Exception as e:
-                    await update.message.reply_text(f"{caption_text}\n\n⚠️ ছবি দেখতে সমস্যা হচ্ছে।", reply_markup=kb)
-            return
-
-        elif text == "🌐 API Orders":
-            curr_key = db_get_setting("smm_api_key", "792d092f1f7fdcebcb9233107b2f1f33")
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("✏️ Edit API Key", callback_data="edit_setting_smm_api_key")]])
-            return await update.message.reply_text(f"🌐 **SMM Panel API Key:**\n\n`{curr_key}`", reply_markup=kb)
-
-        elif text in ["💳 Panel Balance", "panel balance"]:
-            bal_res = get_smm_balance()
-            if bal_res and "balance" in bal_res:
-                bal = bal_res.get("balance", "0")
-                currency = bal_res.get("currency", "USD")
-                await update.message.reply_text(
-                    f"💳 **SMM Panel Balance:**\n───────────────────\n"
-                    f"💰 Current Balance: **{bal} {currency}**",
-                    reply_markup=get_admin_dashboard_keyboard()
-                )
-            else:
-                err = bal_res.get("error") or bal_res.get("message") or "Unknown error"
-                await update.message.reply_text(
-                    f"❌ **Panel Balance Fetch Failed!**\n\nReason: `{err}`",
-                    reply_markup=get_admin_dashboard_keyboard()
-                )
-            return
-
-        elif text == "🧪 Services":
-            curr_svc = db_get_setting("smm_service_id", "1936")
-            curr_view_svc = db_get_setting("smm_view_service_id", "7294")
-            kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("✏️ Edit Reaction Service ID", callback_data="edit_setting_smm_service_id")],
-                [InlineKeyboardButton("✏️ Edit View Service ID", callback_data="edit_setting_smm_view_service_id")]
+            admin_dash_inline_kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🤖 Bot Orders", callback_data="dash_bot_orders"), InlineKeyboardButton("🌐 API Orders", callback_data="dash_api_orders")],
+                [InlineKeyboardButton("💳 Panel Balance", callback_data="dash_panel_balance"), InlineKeyboardButton("📋 All Orders", callback_data="dash_all_orders")],
+                [InlineKeyboardButton("💰 Telegram Super Service", callback_data="dash_tg_super_service"), InlineKeyboardButton("🧪 Services", callback_data="dash_services")],
+                [InlineKeyboardButton("🔄 Replace OFF ❌", callback_data="dash_replace_off"), InlineKeyboardButton("♻️ Refill OFF ❌", callback_data="dash_refill_off")],
+                [InlineKeyboardButton("❌ Canceled", callback_data="dash_canceled"), InlineKeyboardButton("⚠️ Failed/Partial", callback_data="dash_failed_partial")],
+                [InlineKeyboardButton("💡 Coin Rate Settings", callback_data="dash_coin_rate"), InlineKeyboardButton("👥 Referral Settings", callback_data="dash_referral_settings")]
             ])
             return await update.message.reply_text(
-                f"🧪 **SMM Services ID:**\n───────────────────\n"
-                f"👍 **Reaction Service ID:** `{curr_svc}`\n"
-                f"👁️ **Video View Service ID:** `{curr_view_svc}`", 
-                reply_markup=kb
+                "📊 **অ্যাডমিন ড্যাশবোর্ড সেটিংস:**\n───────────────────\nনিচের যেকোনো অপশন বেছে নিন:", 
+                reply_markup=admin_dash_inline_kb
             )
-
-        elif text == "💡 Coin Rate Settings":
-            curr_rate = db_get_setting("coin_rate", "1")
-            curr_dollar = db_get_setting("dollar_rate", "1000")
-            
-            kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("✏️ Edit Reaction Coin Rate", callback_data="edit_setting_coin_rate")],
-                [InlineKeyboardButton("✏️ Edit Dollar Rate ($1 = ? Coins)", callback_data="edit_setting_dollar_rate")]
-            ])
-            return await update.message.reply_text(
-                f"💡 **কয়েন রেট সেটিংস:**\n───────────────────\n"
-                f"📌 প্রতি রিয়্যাকশনে কয়েন: **{curr_rate} Coins**\n"
-                f"💵 ডলারে কয়েন রেট: **$1 = {curr_dollar} Coins**\n\n"
-                f"যেকোনো রেট পরিবর্তন করতে নিচের অপশন বেছে নিন:", 
-                reply_markup=kb
-            )
-
-        elif text == "👥 Referral Settings":
-            curr_ref = db_get_setting("referral_bonus", "100")
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("✏️ Edit Ref Bonus", callback_data="edit_setting_referral_bonus")]])
-            return await update.message.reply_text(
-                f"👥 **রেফারেল সেটিংস:**\n───────────────────\n"
-                f"বর্তমান বোনাস: **প্রতি রেফারে {curr_ref} কয়েন**\n\n"
-                f"রেফারেল বোনাস কয়েন পরিবর্তন করতে নিচের বাটনে ক্লিক করুন।", 
-                reply_markup=kb
-            )
-
-        elif text in ["💰 Telegram Super Service", 
-                      "🔄 Replace OFF ❌", "♻️ Refill OFF ❌", "❌ Canceled", 
-                      "⚠️ Failed/Partial"]:
-            return await update.message.reply_text(f"⚙️ **{text}** অপশনটি সিলেক্ট করা হয়েছে।", reply_markup=get_admin_dashboard_keyboard())
 
         elif text == "👥 Users Report":
             all_u = db_get_all_users()
@@ -1610,6 +1624,7 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(topup_action_callback, pattern="^topup_"))
     app.add_handler(CallbackQueryHandler(admin_user_action_callback, pattern="^uact_"))
     app.add_handler(CallbackQueryHandler(project_action_callback, pattern="^(p_|fe_)"))
+    app.add_handler(CallbackQueryHandler(admin_dashboard_inline_callback, pattern="^dash_"))
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
