@@ -286,10 +286,10 @@ def db_update_topup_status(req_id, status):
     conn.close()
 
 # States
-(STEP_CHANNEL, STEP_DISTRIBUTION, STEP_SPEED, STEP_COUNT, STEP_VIEWS, 
+(STEP_CHANNEL, STEP_COUNT, STEP_VIEWS, 
  STEP_REVIEW, STEP_EDIT_FIELD, STEP_EDIT_VALUE,
  STEP_ADMIN_SEARCH_USER, STEP_ADMIN_BROADCAST, STEP_ADMIN_EDIT_SETTING,
- STEP_TOPUP_AMOUNT, STEP_TOPUP_TXID, STEP_TOPUP_PHOTO) = range(14)
+ STEP_TOPUP_AMOUNT, STEP_TOPUP_TXID, STEP_TOPUP_PHOTO) = range(12)
 
 # 🛒 SMM Order Submit Function
 def send_smm_order(link, quantity, service_id_override=None):
@@ -428,8 +428,6 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "target_url": None,
         "username": None,
         "emojis": "POSITIVE 👍❤️🔥",
-        "distribution": "Random",
-        "speed": "Instant Delivery (Fast)",
         "count": 100,
         "views": 0
     }
@@ -465,75 +463,13 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['draft_project']['target_url'] = f"https://t.me/{ch_username}"
     context.user_data['draft_project']['username'] = ch_username
 
-    return await render_distribution_menu(update, context)
+    return await render_count_menu(update, context)
 
-# 🎲 Step 2 • Distribution Type
-async def render_distribution_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    draft = context.user_data.get('draft_project', {})
-    current_dist = draft.get('distribution', 'Random')
-    
-    text = (
-        f"⚙️ **ধাপ ২ • ডিস্ট্রিবিউশন ধরন**\n"
-        f"───────────────────\n\n"
-        f"👉 বর্তমানে সিলেক্ট করা আছে: **{current_dist}**"
-    )
-    keyboard = [
-        [InlineKeyboardButton("🎲 Random", callback_data="dist_random")],
-        [InlineKeyboardButton("⚖️ Equal Split", callback_data="dist_equal")],
-        [InlineKeyboardButton("Continue ➔", callback_data="dist_done")]
-    ]
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-    else:
-        await context.bot.send_message(chat_id=update.effective_user.id, text=text, reply_markup=InlineKeyboardMarkup(keyboard))
-    return STEP_DISTRIBUTION
-
-async def distribution_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    draft = context.user_data.get('draft_project', {})
-
-    if query.data == "dist_done":
-        return await render_speed_menu(update, context)
-
-    dist_map = {"dist_random": "Random", "dist_equal": "Equal Split"}
-    draft['distribution'] = dist_map.get(query.data, "Random")
-    return await render_distribution_menu(update, context)
-
-# ⚡ Step 3 • Speed Selection
-async def render_speed_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    draft = context.user_data.get('draft_project', {})
-    current_speed = draft.get('speed', 'Instant Delivery (Fast)')
-
-    text = (
-        f"⚡ **ধাপ ৩ • স্পিড সিলেকশন**\n"
-        f"───────────────────\n\n"
-        f"👉 বর্তমানে সিলেক্ট করা আছে: **{current_speed}**"
-    )
-    keyboard = [
-        [InlineKeyboardButton("⚡ Fast", callback_data="spd_fast"), InlineKeyboardButton("⚖️ Medium", callback_data="spd_medium")],
-        [InlineKeyboardButton("Continue ➔", callback_data="spd_done")]
-    ]
-    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-    return STEP_SPEED
-
-async def speed_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    draft = context.user_data.get('draft_project', {})
-
-    if query.data == "spd_done":
-        return await render_count_menu(update, context)
-
-    speed_map = {"spd_fast": "Instant Delivery (Fast)", "spd_medium": "Medium"}
-    draft['speed'] = speed_map.get(query.data, "Instant Delivery (Fast)")
-    return await render_speed_menu(update, context)
-
-# 📊 Step 4 • Reaction Count
+# 📊 Step 2 • Reaction Count (পূর্বের ধাপ ৪)
 async def render_count_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     text = (
-        f"📊 **ধাপ ৪ • রিয়্যাকশন সংখ্যা সিলেকশন**\n"
+        f"📊 **ধাপ ২ • রিয়্যাকশন সংখ্যা সিলেকশন**\n"
         f"───────────────────\n"
         f"👉 বর্তমান রিয়্যাকশন সংখ্যা: **{draft.get('count', 100)}**"
     )
@@ -543,7 +479,11 @@ async def render_count_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("1000", callback_data="cnt_1000"), InlineKeyboardButton("2000", callback_data="cnt_2000"), InlineKeyboardButton("3000", callback_data="cnt_3000"), InlineKeyboardButton("5000", callback_data="cnt_5000")],
         [InlineKeyboardButton("Continue ➔", callback_data="cnt_done")]
     ]
-    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    else:
+        await context.bot.send_message(chat_id=update.effective_user.id, text=text, reply_markup=InlineKeyboardMarkup(keyboard))
     return STEP_COUNT
 
 async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -557,11 +497,11 @@ async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft['count'] = int(query.data.split("_")[1])
     return await render_count_menu(update, context)
 
-# 👁️ Step 5 • Video Views Count
+# 👁️ Step 3 • Video Views Count (পূর্বের ধাপ ৫)
 async def render_views_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     text = (
-        f"👁️ **ধাপ ৫ • ভিডিও ভিউ সিলেকশন**\n"
+        f"👁️ **ধাপ ৩ • ভিডিও ভিউ সিলেকশন**\n"
         f"───────────────────\n"
         f"👉 বর্তমান ভিডিও ভিউ: **{draft.get('views', 0)}**\n"
         f"(কোন ভিডিও পোস্ট করা মাত্রই অটোমেটিক ভিউ যোগ হবে)"
@@ -596,8 +536,6 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"⚙️ প্রজেক্ট স্ট্যাটাস: {draft.get('status', 'ON')}\n"
         f"🔗 চ্যানেল লিংক: {draft.get('target_url')}\n"
         f"😊 রিয়্যাকশন ইমোজি: {draft.get('emojis')}\n"
-        f"⚙️ ডিস্ট্রিবিউশন ধরন: {draft.get('distribution')}\n"
-        f"⚡ ডেলিভারি স্পিড: {draft.get('speed')}\n"
         f"🚀 রিয়্যাকশন সংখ্যা: {draft.get('count')}\n"
         f"👁️ ভিডিও ভিউ: {draft.get('views')}\n\n"
         f"সবকিছু ঠিক থাকলে '✅ Create Project' বাটনে ক্লিক করুন।"
@@ -1407,8 +1345,6 @@ if __name__ == '__main__':
         ],
         states={
             STEP_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_channel)],
-            STEP_DISTRIBUTION: [CallbackQueryHandler(distribution_callback, pattern="^(dist_)")],
-            STEP_SPEED: [CallbackQueryHandler(speed_callback, pattern="^(spd_)")],
             STEP_COUNT: [CallbackQueryHandler(count_callback, pattern="^cnt_")],
             STEP_VIEWS: [CallbackQueryHandler(views_callback, pattern="^vw_")],
             STEP_REVIEW: [
