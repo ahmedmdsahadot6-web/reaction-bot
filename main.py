@@ -1141,21 +1141,61 @@ async def process_admin_search_user(update: Update, context: ContextTypes.DEFAUL
     u_data = db_get_user(txt)
     if u_data:
         is_b = "হ্যাঁ 🚫" if u_data.get("is_blocked", 0) == 1 else "না ✅"
+        block_action_btn = InlineKeyboardButton("🔓 আনব্লক করুন", callback_data=f"adm_unblock_{u_data['user_id']}") if u_data.get("is_blocked", 0) == 1 else InlineKeyboardButton("🚫 ব্লক করুন", callback_data=f"adm_block_{u_data['user_id']}")
+        
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕ কয়েন যোগ / বিয়োগ", callback_data=f"adm_coins_{u_data['user_id']}")],
+            [block_action_btn]
+        ])
+
         text = (
-            f"👤 **ইউজারের তথ্য**\n"
+            f"👤 **ইউজারের সম্পূর্ণ বিবরণ**\n"
             f"───────────────────\n"
             f"🆔 **ইউজার আইডি:** `{u_data['user_id']}`\n"
             f"💰 **ব্যালেন্স:** {u_data['credit']} Coins\n"
-            f"👥 **রেফারেল:** {u_data['ref_count']}\n"
-            f"📁 **প্রজেক্ট:** {len(u_data.get('projects', []))}\n"
-            f"🚫 **ব্লকড:** {is_b}\n"
+            f"👥 **মোট রেফারেল:** {u_data['ref_count']}\n"
+            f"🎁 **রেফারেল আর্নিং:** {u_data['ref_credit']} Coins\n"
+            f"📁 **সক্রিয় প্রজেক্ট:** {len(u_data.get('projects', []))}\n"
+            f"🚫 **ব্লকড স্ট্যাটাস:** {is_b}\n"
             f"───────────────────\n"
-            f"💡 কয়েন যোগ/বিয়োগ করতে পাঠান: `{u_data['user_id']} Amount` (যেমন: `{u_data['user_id']} 500`)"
+            f"💡 **দ্রুত কয়েন পরিবর্তন করতে মেসেজ দিন:**\n`{u_data['user_id']} 500` (কয়েন যোগ)\n`{u_data['user_id']} -500` (কয়েন বিয়োগ)"
         )
         await update.message.reply_text(text, reply_markup=get_admin_keyboard())
+        await update.message.reply_text("👇 **নিচের বাটনসমূহ থেকে অ্যাকশন সিলেক্ট করুন:**", reply_markup=kb)
     else:
         await update.message.reply_text("❌ ডাটাবেজে এই ইউজার আইডিটি পাওয়া যায়নি!", reply_markup=get_admin_keyboard())
     return ConversationHandler.END
+
+async def admin_user_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    if query.from_user.id not in ADMIN_IDS:
+        return
+
+    if data.startswith("adm_block_"):
+        uid = data.split("_")[2]
+        u_data = db_get_user(uid)
+        u_data['is_blocked'] = 1
+        db_save_user(u_data)
+        await query.message.edit_text(f"🚫 **ইউজার `{uid}` সফলভাবে ব্লক করা হয়েছে।**")
+
+    elif data.startswith("adm_unblock_"):
+        uid = data.split("_")[2]
+        u_data = db_get_user(uid)
+        u_data['is_blocked'] = 0
+        db_save_user(u_data)
+        await query.message.edit_text(f"✅ **ইউজার `{uid}` সফলভাবে আনব্লক করা হয়েছে।**")
+
+    elif data.startswith("adm_coins_"):
+        uid = data.split("_")[2]
+        await query.message.reply_text(
+            f"✍️ **কয়েন পরিবর্তন করতে চ্যাটে লিখুন:**\n\n"
+            f"`{uid} 500` (৫০০ কয়েন যোগ করতে)\n"
+            f"`{uid} -200` (২০০ কয়েন কাটতে)",
+            reply_markup=get_admin_keyboard()
+        )
 
 async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
@@ -1342,19 +1382,9 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif text == "👥 Users Report":
             all_u = db_get_all_users()
-            u_list = "👥 **ইউজার রিপোর্ট:**\n───────────────────\n\n"
+            u_list = "👥 **ইউজার রিপোর্ট:**\n───────────────────\n"
             for uid, uinfo in list(all_u.items())[:20]:
-                try:
-                    u_chat = await context.bot.get_chat(int(uid))
-                    username = f"@{u_chat.username}" if u_chat.username else (u_chat.first_name or "N/A")
-                except Exception:
-                    username = "N/A"
-                
-                u_list += (
-                    f"👤 **ইউজারনেম:** {username}\n"
-                    f"🆔 **আইডি:** `{uid}` | 💰 Coins: {uinfo.get('credit', 0)}\n"
-                    f"───────────────\n"
-                )
+                u_list += f"🆔 `{uid}` | 💰 Coins: {uinfo.get('credit', 0)}\n"
             return await update.message.reply_text(u_list, reply_markup=get_admin_keyboard())
 
         elif text == "🏠 Main Menu":
@@ -1449,6 +1479,7 @@ if __name__ == '__main__':
     app.add_handler(channel_handler)
     app.add_handler(conv_handler)
     app.add_handler(CallbackQueryHandler(topup_action_callback, pattern="^topup_"))
+    app.add_handler(CallbackQueryHandler(admin_user_action_callback, pattern="^adm_"))
     app.add_handler(CallbackQueryHandler(project_action_callback, pattern="^(p_|fe_)"))
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
