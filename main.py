@@ -140,8 +140,9 @@ def init_db():
     defaults = {
         "smm_api_key": "792d092f1f7fdcebcb9233107b2f1f33",
         "smm_service_id": "1936",
-        "smm_view_service_id": "7294", #  View Service ID
+        "smm_view_service_id": "7294", # View Service ID
         "coin_rate": "1",          # 1 coin = 1 reaction
+        "view_coin_rate": "1",     # 1 coin = 1 view (Added)
         "dollar_rate": "1000",     # $1 = 1000 coins
         "referral_bonus": "100"    # 100 coins per referral
     }
@@ -254,12 +255,21 @@ def db_get_all_users():
 def db_get_user_spent_coins(user_id):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT SUM(count) FROM orders WHERE user_id = ?", (str(user_id),))
-    row = cursor.fetchone()
+    cursor.execute("SELECT order_type, count FROM orders WHERE user_id = ?", (str(user_id),))
+    rows = cursor.fetchall()
     conn.close()
-    coin_rate = float(db_get_setting("coin_rate", "1"))
-    total_count = row[0] if row and row[0] else 0
-    return int(total_count * coin_rate)
+    
+    react_rate = float(db_get_setting("coin_rate", "1"))
+    view_rate = float(db_get_setting("view_coin_rate", "1"))
+    
+    total_spent = 0
+    for otype, count in rows:
+        if otype == 'Views':
+            total_spent += int(count * view_rate)
+        else:
+            total_spent += int(count * react_rate)
+            
+    return total_spent
 
 def db_get_user_orders_count(user_id):
     conn = sqlite3.connect(DB_FILE)
@@ -550,14 +560,14 @@ async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft['count'] = int(query.data.split("_")[1])
     return await render_count_menu(update, context)
 
-# 👁️ Step 3 •  Views Count
+# 👁️ Step 3 • Views Count
 async def render_views_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     text = (
-        f"👁️ **ধাপ ৩ •  ভিউ সিলেকশন**\n"
+        f"👁️ **ধাপ ৩ • ভিউ সিলেকশন**\n"
         f"───────────────────\n"
-        f"👉 বর্তমান  ভিউ: **{draft.get('views', 0)}**\n"
-        f"(কোন  পোস্ট করা মাত্রই অটোমেটিক ভিউ যোগ হবে)"
+        f"👉 বর্তমান ভিউ: **{draft.get('views', 0)}**\n"
+        f"(কোন পোস্ট করা মাত্রই অটোমেটিক ভিউ যোগ হবে)"
     )
     keyboard = [
         [InlineKeyboardButton("0 (OFF)", callback_data="vw_0"), InlineKeyboardButton("10", callback_data="vw_10"), InlineKeyboardButton("20", callback_data="vw_20"), InlineKeyboardButton("30", callback_data="vw_30")],
@@ -591,7 +601,7 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"👁️ ভিউ অপশন: {draft.get('view_status', 'ON')}\n"
         f"😊 রিয়্যাকশন ইমোজি: {draft.get('emojis')}\n"
         f"🚀 রিয়্যাকশন সংখ্যা: {draft.get('count')}\n"
-        f"👁️  ভিউ: {draft.get('views')}\n\n"
+        f"👁️ ভিউ: {draft.get('views')}\n\n"
         f"সবকিছু ঠিক থাকলে '✅ Create Project' বাটনে ক্লিক করুন।"
     )
     keyboard = [
@@ -654,7 +664,7 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👍 রিয়্যাকশন: {draft.get('react_status', 'ON')}\n"
         f"👁️ ভিউ: {draft.get('view_status', 'ON')}\n"
         f"🚀 রিয়্যাকশন সংখ্যা: {draft['count']}\n"
-        f"👁️  ভিউ: {draft['views']}\n\n"
+        f"👁️ ভিউ: {draft['views']}\n\n"
         f"✅ প্রজেক্ট চালু হয়েছে! এখন থেকে পোস্ট করা মাত্রই অটোমেটিক সার্ভিস চালু হয়ে যাবে।",
         reply_markup=get_user_keyboard()
     )
@@ -871,7 +881,7 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
         prompt_messages = {
             "channel": "✍️ **নতুন চ্যানেলের লিংক পাঠান:**\n(যেমন: `https://t.me/your_channel`) \n\n⚠️ নিশ্চিত করুন বটটি নতুন চ্যানেলে অ্যাডমিন আছে!",
             "count": "✍️ **নতুন রিয়্যাকশন সংখ্যা পাঠান:**\n(যেমন: `100`, `200`, `500`)",
-            "views": "✍️ **নতুন  ভিউ সংখ্যা পাঠান:**\n(যেমন: `0`, `100`, `500`)"
+            "views": "✍️ **নতুন ভিউ সংখ্যা পাঠান:**\n(যেমন: `0`, `100`, `500`)"
         }
         
         msg_to_send = prompt_messages.get(field, "✍️ **নতুন মান লিখে পাঠান:**")
@@ -962,7 +972,7 @@ async def show_my_projects(message_obj, user_id):
             f"───────────────────\n"
             f"🔗 লিংক: {p.get('target_url')}\n"
             f"👍 রিয়্যাকশন সার্ভিস: **{r_st}**\n"
-            f"👁️  ভিউ সার্ভিস: **{v_st}**\n"
+            f"👁️ ভিউ সার্ভিস: **{v_st}**\n"
             f"🚀 রিয়্যাকশন সংখ্যা: **{p.get('count', 100)}**\n"
             f"👁️ ভিউ সংখ্যা: **{p.get('views', 0)}**\n"
             f"😊 ইমোজি: **{p.get('emojis', 'POSITIVE')}**"
@@ -982,7 +992,7 @@ async def show_order_list(message_obj, user_id):
         text += (
             f"🆔 **অর্ডার আইডি:** `{order_id}`\n"
             f"📢 **চ্যানেল:** {channel_name}\n"
-            f"✨ **রিয়্যাকশন:** {count}\n"
+            f"✨ **রিয়্যাকশন/ভিউ:** {count}\n"
             f"📅 **তারিখ:** {created_at}\n"
             f"🔗 **পোস্ট:** [পোস্ট দেখুন]({post_link})\n"
             f"───────────────\n"
@@ -1029,6 +1039,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
         return
 
     coin_rate = float(db_get_setting("coin_rate", "1"))
+    view_coin_rate = float(db_get_setting("view_coin_rate", "1"))
     view_service_id = db_get_setting("smm_view_service_id", "7294")
 
     for uid, uinfo, proj in matched_projects:
@@ -1044,7 +1055,8 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             logger.info(f"⏸️ Reaction & Views both OFF for Channel {ch_name}. Skipping order.")
             continue
 
-        needed_coins = int(reaction_count * coin_rate) if react_status == "ON" else 0
+        needed_react_coins = int(reaction_count * coin_rate) if react_status == "ON" else 0
+        needed_view_coins = int(views_count * view_coin_rate) if (view_status == "ON" and views_count > 0) else 0
 
         if chat_username:
             post_link = f"https://t.me/{chat_username}/{post_id}"
@@ -1054,66 +1066,81 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             clean_cid = raw_channel_id.replace("-100", "")
             post_link = f"https://t.me/c/{clean_cid}/{post_id}"
 
-        if react_status == "ON" and uinfo.get("credit", 0) < needed_coins:
-            try:
-                await context.bot.send_message(
-                    chat_id=user_chat_id,
-                    text=f"⚠️ **পর্যাপ্ত ব্যালেন্স নেই!**\n\n"
-                         f"📢 **চ্যানেল:** {ch_name}\n"
-                         f"📌 **পোস্ট লিংক:** {post_link}\n"
-                         f"প্রয়োজনীয় কয়েন: {needed_coins}\n"
-                         f"অবশিষ্ট কয়েন: {uinfo.get('credit', 0)}\n\n"
-                         f"দয়া করে আপনার অ্যাকাউন্ট ব্যালেন্স রিচার্জ করুন।"
-                )
-            except Exception as e:
-                logger.error(f"Error sending low balance msg: {e}")
-            continue
-
         # Send Reaction Order if Reaction is ON
         if react_status == "ON":
-            smm_res = send_smm_order(post_link, reaction_count)
-
-            if smm_res and "order" in smm_res:
-                order_id = smm_res["order"]
-                uinfo["credit"] -= needed_coins
-                db_save_user(uinfo)
-                db_add_order(uid, order_id, ch_name, reaction_count, post_link, order_type="Reacts", status="completed")
-
-                log_message = (
-                    f" ORDER UPDATE\n"
-                    f"#{order_id}\n"
-                    f"Reacts|{reaction_count}\n"
-                    f"PENDING"
-                )
-
-                try:
-                    await context.bot.send_message(
-                        chat_id=LOG_CHANNEL,
-                        text=log_message
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to send order success alert to {LOG_CHANNEL}: {e}")
-            else:
-                err_msg = smm_res.get("error") or smm_res.get("message") or "SMM Server Response Error"
-                post_btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔗 View Post", url=post_link)]])
+            if uinfo.get("credit", 0) < needed_react_coins:
                 try:
                     await context.bot.send_message(
                         chat_id=user_chat_id,
-                        text=f"❌ **রিয়্যাকশন অর্ডার প্রদান ব্যর্থ হয়েছে!**\n\n"
+                        text=f"⚠️ **রিয়্যাকশনের জন্য পর্যাপ্ত ব্যালেন্স নেই!**\n\n"
                              f"📢 **চ্যানেল:** {ch_name}\n"
-                             f"⚠️ **কারণ:** `{err_msg}`\n\n"
-                             f"📌 **পোস্ট লিংক:** {post_link}",
-                        reply_markup=post_btn
+                             f"📌 **পোস্ট লিংক:** {post_link}\n"
+                             f"প্রয়োজনীয় কয়েন: {needed_react_coins}\n"
+                             f"অবশিষ্ট কয়েন: {uinfo.get('credit', 0)}\n\n"
+                             f"দয়া করে আপনার অ্যাকাউন্ট ব্যালেন্স রিচার্জ করুন।"
                     )
                 except Exception as e:
-                    logger.error(f"Failed to send order fail alert: {e}")
+                    logger.error(f"Error sending low balance msg: {e}")
+            else:
+                smm_res = send_smm_order(post_link, reaction_count)
 
-        # Send  Views Order if Views is ON & views_count > 0
+                if smm_res and "order" in smm_res:
+                    order_id = smm_res["order"]
+                    uinfo["credit"] -= needed_react_coins
+                    db_save_user(uinfo)
+                    db_add_order(uid, order_id, ch_name, reaction_count, post_link, order_type="Reacts", status="completed")
+
+                    log_message = (
+                        f" ORDER UPDATE\n"
+                        f"#{order_id}\n"
+                        f"Reacts|{reaction_count}\n"
+                        f"PENDING"
+                    )
+
+                    try:
+                        await context.bot.send_message(
+                            chat_id=LOG_CHANNEL,
+                            text=log_message
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to send order success alert to {LOG_CHANNEL}: {e}")
+                else:
+                    err_msg = smm_res.get("error") or smm_res.get("message") or "SMM Server Response Error"
+                    post_btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔗 View Post", url=post_link)]])
+                    try:
+                        await context.bot.send_message(
+                            chat_id=user_chat_id,
+                            text=f"❌ **রিয়্যাকশন অর্ডার প্রদান ব্যর্থ হয়েছে!**\n\n"
+                                 f"📢 **চ্যানেল:** {ch_name}\n"
+                                 f"⚠️ **কারণ:** `{err_msg}`\n\n"
+                                 f"📌 **পোস্ট লিংক:** {post_link}",
+                            reply_markup=post_btn
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to send order fail alert: {e}")
+
+        # Send Views Order if Views is ON & views_count > 0
         if view_status == "ON" and views_count > 0:
-            view_res = send_smm_order(post_link, views_count, service_id_override=view_service_id)
-            logger.info(f"📹  View Order Response: {view_res}")
-            if view_res and "order" in view_res:
-                db_add_order(uid, view_res["order"], ch_name, views_count, post_link, order_type="Views", status="completed")
+            if uinfo.get("credit", 0) < needed_view_coins:
+                try:
+                    await context.bot.send_message(
+                        chat_id=user_chat_id,
+                        text=f"⚠️ **ভিউয়ের জন্য পর্যাপ্ত ব্যালেন্স নেই!**\n\n"
+                             f"📢 **চ্যানেল:** {ch_name}\n"
+                             f"📌 **পোস্ট লিংক:** {post_link}\n"
+                             f"প্রয়োজনীয় কয়েন: {needed_view_coins}\n"
+                             f"অবশিষ্ট কয়েন: {uinfo.get('credit', 0)}\n\n"
+                             f"দয়া করে আপনার অ্যাকাউন্ট ব্যালেন্স রিচার্জ করুন।"
+                    )
+                except Exception as e:
+                    logger.error(f"Error sending low balance msg for views: {e}")
+            else:
+                view_res = send_smm_order(post_link, views_count, service_id_override=view_service_id)
+                logger.info(f"📹 View Order Response: {view_res}")
+                if view_res and "order" in view_res:
+                    uinfo["credit"] -= needed_view_coins
+                    db_save_user(uinfo)
+                    db_add_order(uid, view_res["order"], ch_name, views_count, post_link, order_type="Views", status="completed")
 
 # 👑 Admin Handlers: Search User & Actions (Image replica)
 def build_user_card_text_and_markup(uid):
@@ -1318,6 +1345,7 @@ async def admin_settings_edit_callback(update: Update, context: ContextTypes.DEF
             "smm_service_id": "🧪 **নতুন SMM Reaction Service ID পাঠান:**",
             "smm_view_service_id": "👁️ **নতুন SMM View Service ID পাঠান:**",
             "coin_rate": "💡 **নতুন Reaction Coin Rate লিখুন:**\n(যেমন: `1` মানে ১ কয়েন = ১টি রিয়েকশন, `0.5` মানে ১ কয়েন = ২টি রিয়েকশন)",
+            "view_coin_rate": "👁️ **নতুন View Coin Rate লিখুন:**\n(যেমন: `1` মানে ১ কয়েন = ১টি ভিউ, `0.5` মানে ১ কয়েন = ২টি ভিউ)",
             "dollar_rate": "💵 **নতুন Dollar Rate ($1 = ? Coins) লিখুন:**\n(যেমন: `1000` মানে $1 = 1000 Coins)",
             "referral_bonus": "👥 **রেফারেল বোনাসের নতুন Coins সংখ্যা লিখুন:**\n(যেমন: `100`, `200`)"
         }
@@ -1421,21 +1449,24 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
         return await query.message.reply_text(
             f"🧪 **SMM Services ID:**\n───────────────────\n"
             f"👍 **Reaction Service ID:** `{curr_svc}`\n"
-            f"👁️ ** View Service ID:** `{curr_view_svc}`", 
+            f"👁️ **View Service ID:** `{curr_view_svc}`", 
             reply_markup=kb
         )
 
     elif data == "dash_coin_rate":
         curr_rate = db_get_setting("coin_rate", "1")
+        curr_view_rate = db_get_setting("view_coin_rate", "1")
         curr_dollar = db_get_setting("dollar_rate", "1000")
         
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("✏️ Edit Reaction Coin Rate", callback_data="edit_setting_coin_rate")],
+            [InlineKeyboardButton("✏️ Edit View Coin Rate", callback_data="edit_setting_view_coin_rate")],
             [InlineKeyboardButton("✏️ Edit Dollar Rate ($1 = ? Coins)", callback_data="edit_setting_dollar_rate")]
         ])
         return await query.message.reply_text(
             f"💡 **কয়েন রেট সেটিংস:**\n───────────────────\n"
             f"📌 প্রতি রিয়্যাকশনে কয়েন: **{curr_rate} Coins**\n"
+            f"👁️ প্রতি ভিউয়ে কয়েন: **{curr_view_rate} Coins**\n"
             f"💵 ডলারে কয়েন রেট: **$1 = {curr_dollar} Coins**\n\n"
             f"যেকোনো রেট পরিবর্তন করতে নিচের অপশন বেছে নিন:", 
             reply_markup=kb
