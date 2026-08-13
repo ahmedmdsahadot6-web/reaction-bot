@@ -118,7 +118,7 @@ def init_db():
     
     # Default Settings Setup
     defaults = {
-        "smm_api_key": "b2252623a3fac23198b5cd298a38b621",
+        "smm_api_key": "792d092f1f7fdcebcb9233107b2f1f33",
         "smm_service_id": "1936",
         "smm_view_service_id": "7294", # Video View Service ID
         "coin_rate": "1",          # 1 coin = 1 reaction
@@ -144,7 +144,7 @@ def db_get_setting(key, default_val=""):
 def db_set_setting(key, value):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (k, str(value)))
+    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
     conn.commit()
     conn.close()
 
@@ -621,7 +621,7 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg_text, reply_markup=get_user_keyboard())
     return ConversationHandler.END
 
-# 💰 Top-up Flow Logic (UPDATED: Step 2/TxID Removed)
+# 💰 Top-up Flow Logic
 async def start_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = db_get_user(user_id)
@@ -660,7 +660,6 @@ async def save_topup_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['topup_data']['usd_amount'] = usd_val
     context.user_data['topup_data']['amount'] = calc_coins
 
-    # Directly skip TxID step and ask for screenshot
     await update.message.reply_text(
         f"💰 **আপনার ডিপোজিট:** ${usd_val} = **{calc_coins} Coins**\n\n"
         f"👉 **ধাপ ২:** আপনার পেমেন্টের **স্ক্রিনশট (Photo)** টি পাঠান:",
@@ -783,6 +782,7 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
         if 0 <= idx < len(projects):
             curr = projects[idx].get('react_status', 'ON')
             projects[idx]['react_status'] = "OFF" if curr == "ON" else "ON"
+            u_data['projects'] = projects
             db_save_user(u_data)
             await query.message.reply_text(f"✅ Reaction Status পরিবর্তিত হয়ে **{projects[idx]['react_status']}** হয়েছে!")
             return await show_my_projects(query.message, user_id)
@@ -792,6 +792,7 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
         if 0 <= idx < len(projects):
             curr = projects[idx].get('view_status', 'ON')
             projects[idx]['view_status'] = "OFF" if curr == "ON" else "ON"
+            u_data['projects'] = projects
             db_save_user(u_data)
             await query.message.reply_text(f"✅ Views Status পরিবর্তিত হয়ে **{projects[idx]['view_status']}** হয়েছে!")
             return await show_my_projects(query.message, user_id)
@@ -830,6 +831,7 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
     elif data == "p_back":
         await show_my_projects(query.message, user_id)
 
+# 💾 Fixed Edit Save Logic
 async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     val_txt = update.message.text.strip()
     if val_txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
@@ -880,9 +882,11 @@ async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             projects[idx][field] = val_txt
 
+        # ✅ FIXED: Assigning back updated projects array and saving to SQLite Database
+        u_data['projects'] = projects
         db_save_user(u_data)
         context.user_data.pop('edit_target', None)
-        await update.message.reply_text("🎉 **সফলভাবে আপডেট করা হয়েছে!**", reply_markup=get_user_keyboard())
+        await update.message.reply_text("🎉 **সফলভাবে আপডেট এবং সেভ করা হয়েছে!**", reply_markup=get_user_keyboard())
     
     return ConversationHandler.END
 
@@ -1371,7 +1375,7 @@ if __name__ == '__main__':
     app.add_handler(channel_handler)
     app.add_handler(conv_handler)
     app.add_handler(CallbackQueryHandler(topup_action_callback, pattern="^topup_"))
-    app.add_handler(CallbackQueryHandler(project_action_callback, pattern="^(p_|fe_)"))
+    app.add_handler(CallbackQueryHandler(project_action_callback, pattern="^(p_|fe_)\n"))
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
