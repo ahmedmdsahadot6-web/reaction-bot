@@ -144,7 +144,7 @@ def db_get_setting(key, default_val=""):
 def db_set_setting(key, value):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (k, str(value)))
     conn.commit()
     conn.close()
 
@@ -238,6 +238,17 @@ def db_get_user_orders(user_id, limit=10):
         SELECT order_id, channel_name, count, post_link, created_at
         FROM orders WHERE user_id = ? ORDER BY id DESC LIMIT ?
     ''', (str(user_id), limit))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+def db_get_all_bot_orders(limit=50):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT order_id, count
+        FROM orders ORDER BY id DESC LIMIT ?
+    ''', (limit,))
     rows = cursor.fetchall()
     conn.close()
     return rows
@@ -882,7 +893,6 @@ async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             projects[idx][field] = val_txt
 
-        # ✅ FIXED: Assigning back updated projects array and saving to SQLite Database
         u_data['projects'] = projects
         db_save_user(u_data)
         context.user_data.pop('edit_target', None)
@@ -1183,6 +1193,22 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text == "📊 Admin Dashboard":
             return await update.message.reply_text("📊 **অ্যাডমিন ড্যাশবোর্ড সেটিংস:**", reply_markup=get_admin_dashboard_keyboard())
         
+        elif text == "🤖 Bot Orders":
+            bot_orders = db_get_all_bot_orders(limit=50)
+            if not bot_orders:
+                return await update.message.reply_text(
+                    "🤖 **বট কমপ্লিট অর্ডার তালিকা (সর্বশেষ ৫০টি):**\n"
+                    "───────────────────\n"
+                    "❌ কোনো সফল অর্ডার পাওয়া যায়নি।",
+                    reply_markup=get_admin_dashboard_keyboard()
+                )
+            
+            msg = "🤖 **সর্বশেষ ৫০টি সম্পন্ন বট অর্ডার:**\n───────────────────\n\n"
+            for order_id, count in bot_orders:
+                msg += f"🆔 **অর্ডার নাম্বার:** `{order_id}` | 🚀 **রিয়্যাকশন/ভিউ:** {count}\n"
+            
+            return await update.message.reply_text(msg, reply_markup=get_admin_dashboard_keyboard())
+
         elif text == "📋 All Orders":
             pending_topups = db_get_pending_topups()
             if not pending_topups:
@@ -1274,7 +1300,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=kb
             )
 
-        elif text in ["🤖 Bot Orders", "💰 Telegram Super Service", 
+        elif text in ["💰 Telegram Super Service", 
                       "🔄 Replace OFF ❌", "♻️ Refill OFF ❌", "❌ Canceled", 
                       "⚠️ Failed/Partial"]:
             return await update.message.reply_text(f"⚙️ **{text}** অপশনটি সিলেক্ট করা হয়েছে।", reply_markup=get_admin_dashboard_keyboard())
