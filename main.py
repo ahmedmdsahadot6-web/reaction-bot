@@ -77,6 +77,7 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id TEXT PRIMARY KEY,
+            username TEXT DEFAULT '',
             credit INTEGER DEFAULT 500,
             ref_count INTEGER DEFAULT 0,
             ref_credit INTEGER DEFAULT 0,
@@ -84,6 +85,13 @@ def init_db():
             is_blocked INTEGER DEFAULT 0
         )
     ''')
+    
+    # Auto migration for username column
+    cursor.execute("PRAGMA table_info(users)")
+    user_cols = [c[1] for c in cursor.fetchall()]
+    if 'username' not in user_cols:
+        cursor.execute("ALTER TABLE users ADD COLUMN username TEXT DEFAULT ''")
+
     # Orders table (Completed Orders)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS orders (
@@ -152,7 +160,6 @@ def db_get_setting(key, default_val=""):
     conn.close()
     return row[0] if row else default_val
 
-# 🛠️ FIXED DB_SET_SETTING FUNCTION
 def db_set_setting(key, value):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -160,23 +167,24 @@ def db_set_setting(key, value):
     conn.commit()
     conn.close()
 
-def db_get_user(user_id):
+def db_get_user(user_id, username_val=""):
     str_id = str(user_id)
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT credit, ref_count, ref_credit, projects, is_blocked FROM users WHERE user_id = ?", (str_id,))
+    cursor.execute("SELECT credit, ref_count, ref_credit, projects, is_blocked, username FROM users WHERE user_id = ?", (str_id,))
     row = cursor.fetchone()
     
     if not row:
         default_projects = json.dumps([])
         cursor.execute(
-            "INSERT INTO users (user_id, credit, ref_count, ref_credit, projects, is_blocked) VALUES (?, ?, ?, ?, ?, ?)",
-            (str_id, 500, 0, 0, default_projects, 0)
+            "INSERT INTO users (user_id, username, credit, ref_count, ref_credit, projects, is_blocked) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (str_id, username_val, 500, 0, 0, default_projects, 0)
         )
         conn.commit()
         conn.close()
         return {
             "user_id": str_id,
+            "username": username_val,
             "credit": 500,
             "ref_count": 0,
             "ref_credit": 0,
@@ -184,9 +192,17 @@ def db_get_user(user_id):
             "is_blocked": 0
         }
     
+    # Update username if provided
+    current_uname = row[5] or ""
+    if username_val and username_val != current_uname:
+        cursor.execute("UPDATE users SET username = ? WHERE user_id = ?", (username_val, str_id))
+        conn.commit()
+        current_uname = username_val
+
     conn.close()
     return {
         "user_id": str_id,
+        "username": current_uname,
         "credit": row[0],
         "ref_count": row[1],
         "ref_credit": row[2],
@@ -200,9 +216,10 @@ def db_save_user(u_data):
     cursor = conn.cursor()
     cursor.execute('''
         UPDATE users 
-        SET credit = ?, ref_count = ?, ref_credit = ?, projects = ?, is_blocked = ?
+        SET username = ?, credit = ?, ref_count = ?, ref_credit = ?, projects = ?, is_blocked = ?
         WHERE user_id = ?
     ''', (
+        u_data.get("username", ""),
         u_data["credit"],
         u_data["ref_count"],
         u_data["ref_credit"],
@@ -216,7 +233,7 @@ def db_save_user(u_data):
 def db_get_all_users():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT user_id, credit, ref_count, ref_credit, projects, is_blocked FROM users")
+    cursor.execute("SELECT user_id, credit, ref_count, ref_credit, projects, is_blocked, username FROM users")
     rows = cursor.fetchall()
     conn.close()
     
@@ -228,9 +245,28 @@ def db_get_all_users():
             "ref_count": r[2],
             "ref_credit": r[3],
             "projects": json.loads(r[4]) if r[4] else [],
-            "is_blocked": r[5]
+            "is_blocked": r[5],
+            "username": r[6] if len(r) > 6 and r[6] else ""
         }
     return users
+
+def db_get_user_spent_coins(user_id):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT SUM(count) FROM orders WHERE user_id = ?", (str(user_id),))
+    row = cursor.fetchone()
+    conn.close()
+    coin_rate = float(db_get_setting("coin_rate", "1"))
+    total_count = row[0] if row and row[0] else 0
+    return int(total_count * coin_rate)
+
+def db_get_user_orders_count(user_id):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM orders WHERE user_id = ?", (str(user_id),))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else 0
 
 def db_add_order(user_id, order_id, channel_name, count, post_link, order_type="Reacts", status="completed"):
     conn = sqlite3.connect(DB_FILE)
@@ -312,7 +348,8 @@ def db_update_topup_status(req_id, status):
 (STEP_CHANNEL, STEP_COUNT, STEP_VIEWS, 
  STEP_REVIEW, STEP_EDIT_FIELD, STEP_EDIT_VALUE,
  STEP_ADMIN_SEARCH_USER, STEP_ADMIN_BROADCAST, STEP_ADMIN_EDIT_SETTING,
- STEP_TOPUP_AMOUNT, STEP_TOPUP_PHOTO) = range(11)
+ STEP_TOPUP_AMOUNT, STEP_TOPUP_PHOTO,
+ STEP_ADMIN_ADD_COINS, STEP_ADMIN_DEDUCT_COINS) = range(13)
 
 # 🛒 SMM Order Submit Function
 def send_smm_order(link, quantity, service_id_override=None):
@@ -386,8 +423,9 @@ def cancel_keyboard():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     str_id = str(user.id)
+    username = user.username or ""
 
-    u_data = db_get_user(str_id)
+    u_data = db_get_user(str_id, username_val=username)
 
     if u_data.get("is_blocked", 0) == 1:
         await update.message.reply_text("🚫 আপনাকে এই বটটি ব্যবহার করা থেকে ব্লক করা হয়েছে।")
@@ -637,6 +675,7 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('edit_target', None)
     context.user_data.pop('admin_edit_key', None)
     context.user_data.pop('topup_data', None)
+    context.user_data.pop('admin_action_target', None)
     msg_text = "প্রসেস বাতিল করা হয়েছে।"
     if update.callback_query:
         await update.callback_query.message.reply_text(msg_text, reply_markup=get_user_keyboard())
@@ -1086,10 +1125,50 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             if view_res and "order" in view_res:
                 db_add_order(uid, view_res["order"], ch_name, views_count, post_link, order_type="Views", status="completed")
 
-# 👑 Admin Handlers
+# 👑 Admin Handlers: Search User & Actions (Image replica)
+def build_user_card_text_and_markup(uid):
+    u_data = db_get_user(uid)
+    if not u_data:
+        return None, None
+
+    coins = u_data.get('credit', 0)
+    spent = db_get_user_spent_coins(uid)
+    total_orders = db_get_user_orders_count(uid)
+
+    projects = u_data.get('projects', [])
+    if projects:
+        channels_str = ", ".join([p.get('channel_name', 'Channel') for p in projects])
+    else:
+        channels_str = "None"
+
+    is_b = u_data.get("is_blocked", 0) == 1
+    status_str = "Banned 🔴" if is_b else "Active 🟢"
+    ban_btn_text = "🟢 Unban" if is_b else "🔴 Ban"
+
+    text = (
+        f"👤 User: `{uid}`\n"
+        f"💰 {coins} | 💸 {spent}\n"
+        f"✅ Orders: {total_orders}\n"
+        f"🔗 {channels_str}\n"
+        f"🚫 {status_str}"
+    )
+
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("➕ Add", callback_data=f"uact_add_{uid}"),
+            InlineKeyboardButton("➖ Deduct", callback_data=f"uact_deduct_{uid}")
+        ],
+        [
+            InlineKeyboardButton(f"{ban_btn_text}", callback_data=f"uact_ban_{uid}"),
+            InlineKeyboardButton("📋 Orders", callback_data=f"uact_orders_{uid}")
+        ]
+    ])
+
+    return text, kb
+
 async def start_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
-    await update.message.reply_text("👤 **খোঁজ করার জন্য ইউজার আইডিটি পাঠান:**", reply_markup=cancel_keyboard())
+    await update.message.reply_text("🔍 **ইউজার ID লিখুন:**", reply_markup=cancel_keyboard())
     return STEP_ADMIN_SEARCH_USER
 
 async def process_admin_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1100,21 +1179,116 @@ async def process_admin_search_user(update: Update, context: ContextTypes.DEFAUL
 
     u_data = db_get_user(txt)
     if u_data:
-        is_b = "হ্যাঁ 🚫" if u_data.get("is_blocked", 0) == 1 else "না ✅"
-        text = (
-            f"👤 **ইউজারের তথ্য**\n"
-            f"───────────────────\n"
-            f"🆔 **ইউজার আইডি:** `{u_data['user_id']}`\n"
-            f"💰 **ব্যালেন্স:** {u_data['credit']} Coins\n"
-            f"👥 **রেফারেল:** {u_data['ref_count']}\n"
-            f"📁 **প্রজেক্ট:** {len(u_data.get('projects', []))}\n"
-            f"🚫 **ব্লকড:** {is_b}\n"
-            f"───────────────────\n"
-            f"💡 কয়েন যোগ/বিয়োগ করতে পাঠান: `{u_data['user_id']} Amount` (যেমন: `{u_data['user_id']} 500`)"
-        )
-        await update.message.reply_text(text, reply_markup=get_admin_keyboard())
+        card_text, card_kb = build_user_card_text_and_markup(txt)
+        await update.message.reply_text(card_text, reply_markup=card_kb, parse_mode="Markdown")
     else:
         await update.message.reply_text("❌ ডাটাবেজে এই ইউজার আইডিটি পাওয়া যায়নি!", reply_markup=get_admin_keyboard())
+    return ConversationHandler.END
+
+# Admin Inline Action Callback (Add, Deduct, Ban, Orders)
+async def admin_user_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if query.from_user.id not in ADMIN_IDS:
+        return
+
+    data = query.data
+    parts = data.split("_")
+    action = parts[1]
+    target_uid = parts[2]
+
+    if action == "add":
+        context.user_data['admin_action_target'] = target_uid
+        await query.message.reply_text(
+            f"➕ **ইউজার ID `{target_uid}` এর সাথে কত কয়েন যোগ করতে চান লিখুন:**",
+            reply_markup=cancel_keyboard()
+        )
+        return STEP_ADMIN_ADD_COINS
+
+    elif action == "deduct":
+        context.user_data['admin_action_target'] = target_uid
+        await query.message.reply_text(
+            f"➖ **ইউজার ID `{target_uid}` এর অ্যাকাউন্ট থেকে কত কয়েন কাটতে চান লিখুন:**",
+            reply_markup=cancel_keyboard()
+        )
+        return STEP_ADMIN_DEDUCT_COINS
+
+    elif action == "ban":
+        u_data = db_get_user(target_uid)
+        if u_data:
+            current_block = u_data.get("is_blocked", 0)
+            u_data["is_blocked"] = 0 if current_block == 1 else 1
+            db_save_user(u_data)
+
+            card_text, card_kb = build_user_card_text_and_markup(target_uid)
+            try:
+                await query.edit_message_text(card_text, reply_markup=card_kb, parse_mode="Markdown")
+            except Exception:
+                await query.message.reply_text(card_text, reply_markup=card_kb, parse_mode="Markdown")
+
+    elif action == "orders":
+        orders = db_get_user_orders(target_uid, limit=50)
+        if not orders:
+            await query.message.reply_text(f"📋 **ইউজার `{target_uid}` এর কোনো অর্ডার হিস্ট্রি পাওয়া যায়নি।**")
+            return
+
+        orders_text = f"📋 **ইউজার `{target_uid}` এর শেষ ৫০টি অর্ডার:**\n───────────────────\n"
+        for o in orders:
+            oid, ch_name, count, link, created_at = o
+            orders_text += f"🆔 #{oid} | 📢 {ch_name} | 🚀 {count} | 📅 {created_at}\n"
+
+        if len(orders_text) > 4000:
+            for chunk in [orders_text[i:i+4000] for i in range(0, len(orders_text), 4000)]:
+                await query.message.reply_text(chunk)
+        else:
+            await query.message.reply_text(orders_text)
+
+async def process_admin_add_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = update.message.text.strip()
+    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+        context.user_data.pop('admin_action_target', None)
+        await update.message.reply_text("বাতিল করা হয়েছে।", reply_markup=get_admin_keyboard())
+        return ConversationHandler.END
+
+    target_uid = context.user_data.get('admin_action_target')
+    if not target_uid or not txt.isdigit():
+        await update.message.reply_text("❌ দয়া করে একটি সঠিক ধনাত্মক সংখ্যা লিখুন!")
+        return STEP_ADMIN_ADD_COINS
+
+    amount = int(txt)
+    u_data = db_get_user(target_uid)
+    u_data['credit'] += amount
+    db_save_user(u_data)
+
+    context.user_data.pop('admin_action_target', None)
+    await update.message.reply_text(f"✅ ইউজার `{target_uid}` কে সফলভাবে **{amount} Coins** প্রদান করা হয়েছে!", reply_markup=get_admin_keyboard())
+
+    card_text, card_kb = build_user_card_text_and_markup(target_uid)
+    await update.message.reply_text(card_text, reply_markup=card_kb, parse_mode="Markdown")
+    return ConversationHandler.END
+
+async def process_admin_deduct_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = update.message.text.strip()
+    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+        context.user_data.pop('admin_action_target', None)
+        await update.message.reply_text("বাতিল করা হয়েছে।", reply_markup=get_admin_keyboard())
+        return ConversationHandler.END
+
+    target_uid = context.user_data.get('admin_action_target')
+    if not target_uid or not txt.isdigit():
+        await update.message.reply_text("❌ দয়া করে একটি সঠিক ধনাত্মক সংখ্যা লিখুন!")
+        return STEP_ADMIN_DEDUCT_COINS
+
+    amount = int(txt)
+    u_data = db_get_user(target_uid)
+    u_data['credit'] = max(0, u_data['credit'] - amount)
+    db_save_user(u_data)
+
+    context.user_data.pop('admin_action_target', None)
+    await update.message.reply_text(f"✅ ইউজার `{target_uid}` এর অ্যাকাউন্ট থেকে **{amount} Coins** কেটে নেওয়া হয়েছে!", reply_markup=get_admin_keyboard())
+
+    card_text, card_kb = build_user_card_text_and_markup(target_uid)
+    await update.message.reply_text(card_text, reply_markup=card_kb, parse_mode="Markdown")
     return ConversationHandler.END
 
 async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1181,8 +1355,10 @@ async def process_admin_edit_setting(update: Update, context: ContextTypes.DEFAU
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     str_id = str(user_id)
+    username = update.effective_user.username or ""
     text = (update.message.text or "").strip()
-    u_data = db_get_user(str_id)
+    
+    u_data = db_get_user(str_id, username_val=username)
 
     if text and text.lower() in ["admin", "অ্যাডমিন"]:
         return await admin_panel_command(update, context)
@@ -1314,10 +1490,31 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif text == "👥 Users Report":
             all_u = db_get_all_users()
-            u_list = "👥 **ইউজার রিপোর্ট:**\n───────────────────\n"
-            for uid, uinfo in list(all_u.items())[:20]:
-                u_list += f"🆔 `{uid}` | 💰 Coins: {uinfo.get('credit', 0)}\n"
-            return await update.message.reply_text(u_list, reply_markup=get_admin_keyboard())
+            u_list = "👥 **ইউজার রিপোর্ট:**\n───────────────────\n\n"
+            for uid, uinfo in list(all_u.items())[:30]:
+                uname = f"@{uinfo['username']}" if uinfo.get('username') else "N/A"
+                projects = uinfo.get('projects', [])
+                if projects:
+                    ch_names = ", ".join([p.get('channel_name', 'Channel') for p in projects])
+                else:
+                    ch_names = "None"
+                
+                spent_coins = db_get_user_spent_coins(uid)
+
+                u_list += (
+                    f"👤 **Username:** {uname}\n"
+                    f"🆔 **ID:** `{uid}`\n"
+                    f"📢 **Channel:** {ch_names}\n"
+                    f"💰 **Coins:** {uinfo.get('credit', 0)} | 💸 **Spent:** {spent_coins}\n"
+                    f"───────────────\n"
+                )
+            
+            if len(u_list) > 4000:
+                for chunk in [u_list[i:i+4000] for i in range(0, len(u_list), 4000)]:
+                    await update.message.reply_text(chunk, reply_markup=get_admin_keyboard())
+            else:
+                await update.message.reply_text(u_list, reply_markup=get_admin_keyboard())
+            return
 
         elif text == "🏠 Main Menu":
             return await update.message.reply_text("🏠 মেইন মেনু:", reply_markup=get_user_keyboard())
@@ -1375,7 +1572,8 @@ if __name__ == '__main__':
             MessageHandler(filters.Regex("^👤 Search User$"), start_search_user),
             MessageHandler(filters.Regex("^📢 Send SMS$"), start_broadcast),
             CallbackQueryHandler(project_action_callback, pattern="^(fe_|p_)"),
-            CallbackQueryHandler(admin_settings_edit_callback, pattern="^edit_setting_")
+            CallbackQueryHandler(admin_settings_edit_callback, pattern="^edit_setting_"),
+            CallbackQueryHandler(admin_user_action_callback, pattern="^uact_")
         ],
         states={
             STEP_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_channel)],
@@ -1393,7 +1591,9 @@ if __name__ == '__main__':
             STEP_TOPUP_PHOTO: [
                 MessageHandler(filters.PHOTO, save_topup_photo),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, save_topup_photo)
-            ]
+            ],
+            STEP_ADMIN_ADD_COINS: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_add_coins)],
+            STEP_ADMIN_DEDUCT_COINS: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_deduct_coins)]
         },
         fallbacks=[
             CommandHandler('start', start), 
@@ -1408,6 +1608,7 @@ if __name__ == '__main__':
     app.add_handler(channel_handler)
     app.add_handler(conv_handler)
     app.add_handler(CallbackQueryHandler(topup_action_callback, pattern="^topup_"))
+    app.add_handler(CallbackQueryHandler(admin_user_action_callback, pattern="^uact_"))
     app.add_handler(CallbackQueryHandler(project_action_callback, pattern="^(p_|fe_)"))
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
