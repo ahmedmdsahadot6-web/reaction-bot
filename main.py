@@ -118,7 +118,7 @@ def init_db():
     
     # Default Settings Setup
     defaults = {
-        "smm_api_key": "792d092f1f7fdcebcb9233107b2f1f33",
+        "smm_api_key": "b2252623a3fac23198b5cd298a38b621",
         "smm_service_id": "1936",
         "smm_view_service_id": "7294", # Video View Service ID
         "coin_rate": "1",          # 1 coin = 1 reaction
