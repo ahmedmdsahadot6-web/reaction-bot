@@ -286,10 +286,10 @@ def db_update_topup_status(req_id, status):
     conn.close()
 
 # States
-(STEP_CHANNEL, STEP_DISTRIBUTION, STEP_SPEED, STEP_COUNT, STEP_VIEWS, 
+(STEP_CHANNEL, STEP_COUNT, STEP_VIEWS, 
  STEP_REVIEW, STEP_EDIT_FIELD, STEP_EDIT_VALUE,
  STEP_ADMIN_SEARCH_USER, STEP_ADMIN_BROADCAST, STEP_ADMIN_EDIT_SETTING,
- STEP_TOPUP_AMOUNT, STEP_TOPUP_TXID, STEP_TOPUP_PHOTO) = range(14)
+ STEP_TOPUP_AMOUNT, STEP_TOPUP_TXID, STEP_TOPUP_PHOTO) = range(12)
 
 # 🛒 SMM Order Submit Function
 def send_smm_order(link, quantity, service_id_override=None):
@@ -388,9 +388,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 db_save_user(ref_data)
 
     await update.message.reply_text(
-        f"👋 স্বাগতম {user.first_name}!\n\n"
-        f"🚀 **মাল্টি-রিয়্যাকশন SMM ইঞ্জিন সক্রিয় আছে**\n"
-        f"আপনার চ্যানেলের রিয়্যাকশন অটোমেশন সেটআপ এবং পরিচালনা করতে নিচের মেনু অপশনগুলো ব্যবহার করুন।",
+        "👋 স্বাগতম!\n"
+        "Telegram Super Service\n\n"
+        "📢 https://t.me/orderchannelsuperfast",
         reply_markup=get_user_keyboard()
     )
 
@@ -425,11 +425,11 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data['draft_project'] = {
         "status": "ON",
+        "react_status": "ON",
+        "view_status": "ON",
         "target_url": None,
         "username": None,
         "emojis": "POSITIVE 👍❤️🔥",
-        "distribution": "Random",
-        "speed": "Instant Delivery (Fast)",
         "count": 100,
         "views": 0
     }
@@ -465,75 +465,13 @@ async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['draft_project']['target_url'] = f"https://t.me/{ch_username}"
     context.user_data['draft_project']['username'] = ch_username
 
-    return await render_distribution_menu(update, context)
+    return await render_count_menu(update, context)
 
-# 🎲 Step 2 • Distribution Type
-async def render_distribution_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    draft = context.user_data.get('draft_project', {})
-    current_dist = draft.get('distribution', 'Random')
-    
-    text = (
-        f"⚙️ **ধাপ ২ • ডিস্ট্রিবিউশন ধরন**\n"
-        f"───────────────────\n\n"
-        f"👉 বর্তমানে সিলেক্ট করা আছে: **{current_dist}**"
-    )
-    keyboard = [
-        [InlineKeyboardButton("🎲 Random", callback_data="dist_random")],
-        [InlineKeyboardButton("⚖️ Equal Split", callback_data="dist_equal")],
-        [InlineKeyboardButton("Continue ➔", callback_data="dist_done")]
-    ]
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-    else:
-        await context.bot.send_message(chat_id=update.effective_user.id, text=text, reply_markup=InlineKeyboardMarkup(keyboard))
-    return STEP_DISTRIBUTION
-
-async def distribution_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    draft = context.user_data.get('draft_project', {})
-
-    if query.data == "dist_done":
-        return await render_speed_menu(update, context)
-
-    dist_map = {"dist_random": "Random", "dist_equal": "Equal Split"}
-    draft['distribution'] = dist_map.get(query.data, "Random")
-    return await render_distribution_menu(update, context)
-
-# ⚡ Step 3 • Speed Selection
-async def render_speed_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    draft = context.user_data.get('draft_project', {})
-    current_speed = draft.get('speed', 'Instant Delivery (Fast)')
-
-    text = (
-        f"⚡ **ধাপ ৩ • স্পিড সিলেকশন**\n"
-        f"───────────────────\n\n"
-        f"👉 বর্তমানে সিলেক্ট করা আছে: **{current_speed}**"
-    )
-    keyboard = [
-        [InlineKeyboardButton("⚡ Fast", callback_data="spd_fast"), InlineKeyboardButton("⚖️ Medium", callback_data="spd_medium")],
-        [InlineKeyboardButton("Continue ➔", callback_data="spd_done")]
-    ]
-    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-    return STEP_SPEED
-
-async def speed_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    draft = context.user_data.get('draft_project', {})
-
-    if query.data == "spd_done":
-        return await render_count_menu(update, context)
-
-    speed_map = {"spd_fast": "Instant Delivery (Fast)", "spd_medium": "Medium"}
-    draft['speed'] = speed_map.get(query.data, "Instant Delivery (Fast)")
-    return await render_speed_menu(update, context)
-
-# 📊 Step 4 • Reaction Count
+# 📊 Step 2 • Reaction Count
 async def render_count_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     text = (
-        f"📊 **ধাপ ৪ • রিয়্যাকশন সংখ্যা সিলেকশন**\n"
+        f"📊 **ধাপ ২ • রিয়্যাকশন সংখ্যা সিলেকশন**\n"
         f"───────────────────\n"
         f"👉 বর্তমান রিয়্যাকশন সংখ্যা: **{draft.get('count', 100)}**"
     )
@@ -543,7 +481,11 @@ async def render_count_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("1000", callback_data="cnt_1000"), InlineKeyboardButton("2000", callback_data="cnt_2000"), InlineKeyboardButton("3000", callback_data="cnt_3000"), InlineKeyboardButton("5000", callback_data="cnt_5000")],
         [InlineKeyboardButton("Continue ➔", callback_data="cnt_done")]
     ]
-    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    else:
+        await context.bot.send_message(chat_id=update.effective_user.id, text=text, reply_markup=InlineKeyboardMarkup(keyboard))
     return STEP_COUNT
 
 async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -557,11 +499,11 @@ async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft['count'] = int(query.data.split("_")[1])
     return await render_count_menu(update, context)
 
-# 👁️ Step 5 • Video Views Count
+# 👁️ Step 3 • Video Views Count
 async def render_views_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     text = (
-        f"👁️ **ধাপ ৫ • ভিডিও ভিউ সিলেকশন**\n"
+        f"👁️ **ধাপ ৩ • ভিডিও ভিউ সিলেকশন**\n"
         f"───────────────────\n"
         f"👉 বর্তমান ভিডিও ভিউ: **{draft.get('views', 0)}**\n"
         f"(কোন ভিডিও পোস্ট করা মাত্রই অটোমেটিক ভিউ যোগ হবে)"
@@ -593,11 +535,10 @@ async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
     text = (
         f"✨ **চূড়ান্ত তথ্য পর্যালোচনা** ✨\n"
         f"───────────────────\n\n"
-        f"⚙️ প্রজেক্ট স্ট্যাটাস: {draft.get('status', 'ON')}\n"
         f"🔗 চ্যানেল লিংক: {draft.get('target_url')}\n"
+        f"👍 রিয়্যাকশন অপশন: {draft.get('react_status', 'ON')}\n"
+        f"👁️ ভিউ অপশন: {draft.get('view_status', 'ON')}\n"
         f"😊 রিয়্যাকশন ইমোজি: {draft.get('emojis')}\n"
-        f"⚙️ ডিস্ট্রিবিউশন ধরন: {draft.get('distribution')}\n"
-        f"⚡ ডেলিভারি স্পিড: {draft.get('speed')}\n"
         f"🚀 রিয়্যাকশন সংখ্যা: {draft.get('count')}\n"
         f"👁️ ভিডিও ভিউ: {draft.get('views')}\n\n"
         f"সবকিছু ঠিক থাকলে '✅ Create Project' বাটনে ক্লিক করুন।"
@@ -630,7 +571,7 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=chat_info.id,
                 text=f"🤖 **বট সফলভাবে কানেক্ট হয়েছে!**\n\n"
                      f"✅ @{BOT_USERNAME} সফলভাবে এই চ্যানেলে যুক্ত হয়েছে।\n"
-                     f"🚀 প্রতিটি নতুন পোস্টের জন্য স্বয়ংক্রিয় রিয়্যাকশন অর্ডার ট্রিগার হবে।"
+                     f"🚀 প্রতিটি নতুন পোস্টের জন্য স্বয়ংক্রিয় রিয়্যাকশন ও ভিউ অর্ডার ট্রিগার হবে।"
             )
         except Exception as e:
             logger.warning(f"Failed to send confirmation message to channel: {e}")
@@ -659,10 +600,11 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🎉 **প্রজেক্ট সফলভাবে তৈরি হয়েছে!**\n\n"
         f"📁 চ্যানেল: {channel_title}\n"
         f"🆔 চ্যানেল আইডি: `{channel_id}`\n"
-        f"⚙️ স্ট্যাটাস: {draft.get('status', 'ON')}\n"
+        f"👍 রিয়্যাকশন: {draft.get('react_status', 'ON')}\n"
+        f"👁️ ভিউ: {draft.get('view_status', 'ON')}\n"
         f"🚀 রিয়্যাকশন সংখ্যা: {draft['count']}\n"
         f"👁️ ভিডিও ভিউ: {draft['views']}\n\n"
-        f"✅ প্রজেক্ট চালু হয়েছে! এখন থেকে পোস্ট করা মাত্রই অটোমেটিক রিয়্যাকশন চলে যাবে।",
+        f"✅ প্রজেক্ট চালু হয়েছে! এখন থেকে পোস্ট করা মাত্রই অটোমেটিক সার্ভিস চালু হয়ে যাবে।",
         reply_markup=get_user_keyboard()
     )
     return ConversationHandler.END
@@ -679,7 +621,7 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg_text, reply_markup=get_user_keyboard())
     return ConversationHandler.END
 
-# 💰 Top-up Flow Logic (With Binance Pay ID)
+# 💰 Top-up Flow Logic (UPDATED TO REMOVE INSTRUCTION MESSAGE)
 async def start_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = db_get_user(user_id)
@@ -692,9 +634,6 @@ async def start_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💎 **আপনার বর্তমান ব্যালেন্স:** {u_data['credit']} coins\n"
         f"💵 **রেট:** $1 = {dollar_rate} Coins\n\n"
         f"🟡 **Binance Pay ID:** `{binance_pay_id}`\n\n"
-        f"💳 **টপ-আপ করার নিয়ম:**\n"
-        f"১) উপরে দেওয়া Binance Pay ID তে ডলার সেন্ড করুন।\n"
-        f"২) সেন্ড করার পর নিচে ডলারের পরিমাণ, Order ID/TxID এবং স্ক্রিনশট জমা দিন।\n\n"
         f"👉 **ধাপ ১:** কত ডলার ডিপোজিট করেছেন তা লিখুন (যেমন: `1`, `5`, `10`):"
     )
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=cancel_keyboard())
@@ -859,12 +798,22 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
     u_data = db_get_user(user_id)
     projects = u_data.get('projects', [])
 
-    if data.startswith("p_toggle_"):
+    if data.startswith("p_togreact_"):
         idx = int(data.split("_")[2])
         if 0 <= idx < len(projects):
-            projects[idx]['status'] = "OFF" if projects[idx].get('status', 'ON') == "ON" else "ON"
+            curr = projects[idx].get('react_status', 'ON')
+            projects[idx]['react_status'] = "OFF" if curr == "ON" else "ON"
             db_save_user(u_data)
-            await query.message.reply_text(f"✅ প্রজেক্ট স্ট্যাটাস পরিবর্তিত হয়ে **{projects[idx]['status']}** হয়েছে!")
+            await query.message.reply_text(f"✅ Reaction Status পরিবর্তিত হয়ে **{projects[idx]['react_status']}** হয়েছে!")
+            return await show_my_projects(query.message, user_id)
+
+    elif data.startswith("p_togview_"):
+        idx = int(data.split("_")[2])
+        if 0 <= idx < len(projects):
+            curr = projects[idx].get('view_status', 'ON')
+            projects[idx]['view_status'] = "OFF" if curr == "ON" else "ON"
+            db_save_user(u_data)
+            await query.message.reply_text(f"✅ Views Status পরিবর্তিত হয়ে **{projects[idx]['view_status']}** হয়েছে!")
             return await show_my_projects(query.message, user_id)
 
     elif data.startswith("p_edit_"):
@@ -967,19 +916,24 @@ async def show_my_projects(message_obj, user_id):
         return
 
     for idx, p in enumerate(projects):
-        st = p.get('status', 'ON')
-        btn_st_text = "🔴 Turn OFF" if st == "ON" else "🟢 Turn ON"
+        r_st = p.get('react_status', 'ON')
+        v_st = p.get('view_status', 'ON')
+        
+        btn_react_text = "👍 React: ON ✅" if r_st == "ON" else "👍 React: OFF ❌"
+        btn_view_text = "👁️ Views: ON ✅" if v_st == "ON" else "👁️ Views: OFF ❌"
         
         kb = [
-            [InlineKeyboardButton(btn_st_text, callback_data=f"p_toggle_{idx}"), InlineKeyboardButton("✏️ Edit", callback_data=f"p_edit_{idx}")]
+            [InlineKeyboardButton(btn_react_text, callback_data=f"p_togreact_{idx}"), InlineKeyboardButton(btn_view_text, callback_data=f"p_togview_{idx}")],
+            [InlineKeyboardButton("✏️ Edit Settings", callback_data=f"p_edit_{idx}")]
         ]
         p_text = (
-            f"🛠️ **প্রজেক্ট সেটিং #{idx+1}: {p.get('channel_name', 'চ্যানেল')}**\n"
+            f"🛠️ **প্রজেক্ট সেটিংস #{idx+1}: {p.get('channel_name', 'চ্যানেল')}**\n"
             f"───────────────────\n"
             f"🔗 লিংক: {p.get('target_url')}\n"
-            f"⚙️ স্ট্যাটাস: **{st}**\n"
-            f"🚀 রিয়্যাকশন: **{p.get('count', 100)}**\n"
-            f"👁️ ভিউ: **{p.get('views', 0)}**\n"
+            f"👍 রিয়্যাকশন সার্ভিস: **{r_st}**\n"
+            f"👁️ ভিডিও ভিউ সার্ভিস: **{v_st}**\n"
+            f"🚀 রিয়্যাকশন সংখ্যা: **{p.get('count', 100)}**\n"
+            f"👁️ ভিউ সংখ্যা: **{p.get('views', 0)}**\n"
             f"😊 ইমোজি: **{p.get('emojis', 'POSITIVE')}**"
         )
         await message_obj.reply_text(p_text, reply_markup=InlineKeyboardMarkup(kb))
@@ -1035,10 +989,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             proj_cid = str(proj.get("channel_id", ""))
             proj_uname = str(proj.get("username", "")).lower().replace("@", "")
 
-            if proj.get("status", "ON") == "OFF":
-                logger.info(f"⏸️ Project is OFF for Channel {proj_cid}. Skipping order.")
-                continue
-
             if (proj_cid and proj_cid == raw_channel_id) or \
                (chat_username and proj_uname == chat_username) or \
                (proj_cid.replace("-100", "") == raw_channel_id.replace("-100", "")):
@@ -1056,7 +1006,14 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
         reaction_count = proj.get("count", 100)
         views_count = proj.get("views", 0)
         
-        needed_coins = int(reaction_count * coin_rate)
+        react_status = proj.get("react_status", "ON")
+        view_status = proj.get("view_status", "ON")
+
+        if react_status == "OFF" and view_status == "OFF":
+            logger.info(f"⏸️ Reaction & Views both OFF for Channel {ch_name}. Skipping order.")
+            continue
+
+        needed_coins = int(reaction_count * coin_rate) if react_status == "ON" else 0
 
         if chat_username:
             post_link = f"https://t.me/{chat_username}/{post_id}"
@@ -1066,7 +1023,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             clean_cid = raw_channel_id.replace("-100", "")
             post_link = f"https://t.me/c/{clean_cid}/{post_id}"
 
-        if uinfo.get("credit", 0) < needed_coins:
+        if react_status == "ON" and uinfo.get("credit", 0) < needed_coins:
             try:
                 await context.bot.send_message(
                     chat_id=user_chat_id,
@@ -1081,50 +1038,49 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                 logger.error(f"Error sending low balance msg: {e}")
             continue
 
-        # Send Reaction Order
-        smm_res = send_smm_order(post_link, reaction_count)
+        # Send Reaction Order if Reaction is ON
+        if react_status == "ON":
+            smm_res = send_smm_order(post_link, reaction_count)
 
-        if smm_res and "order" in smm_res:
-            order_id = smm_res["order"]
-            uinfo["credit"] -= needed_coins
-            db_save_user(uinfo)
-            db_add_order(uid, order_id, ch_name, reaction_count, post_link)
+            if smm_res and "order" in smm_res:
+                order_id = smm_res["order"]
+                uinfo["credit"] -= needed_coins
+                db_save_user(uinfo)
+                db_add_order(uid, order_id, ch_name, reaction_count, post_link)
 
-            # Send Video Views Order if views > 0 (Using Service ID: 7294)
-            if views_count > 0:
-                view_res = send_smm_order(post_link, views_count, service_id_override=view_service_id)
-                logger.info(f"📹 Video View Order Response: {view_res}")
-
-            # Updated Order Log Message Format
-            log_message = (
-                f" ORDER UPDATE\n"
-                f"#{order_id}\n"
-                f"Reacts|{reaction_count}\n"
-                f"PENDING"
-            )
-
-            try:
-                await context.bot.send_message(
-                    chat_id=LOG_CHANNEL,
-                    text=log_message
+                log_message = (
+                    f" ORDER UPDATE\n"
+                    f"#{order_id}\n"
+                    f"Reacts|{reaction_count}\n"
+                    f"PENDING"
                 )
-                logger.info(f"✅ SMM Order #{order_id} posted to {LOG_CHANNEL}")
-            except Exception as e:
-                logger.error(f"Failed to send order success alert to {LOG_CHANNEL}: {e}")
-        else:
-            err_msg = smm_res.get("error") or smm_res.get("message") or "SMM Server Response Error"
-            post_btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔗 View Post", url=post_link)]])
-            try:
-                await context.bot.send_message(
-                    chat_id=user_chat_id,
-                    text=f"❌ **অর্ডার প্রদান ব্যর্থ হয়েছে!**\n\n"
-                         f"📢 **চ্যানেল:** {ch_name}\n"
-                         f"⚠️ **কারণ:** `{err_msg}`\n\n"
-                         f"📌 **পোস্ট লিংক:** {post_link}",
-                    reply_markup=post_btn
-                )
-            except Exception as e:
-                logger.error(f"Failed to send order fail alert: {e}")
+
+                try:
+                    await context.bot.send_message(
+                        chat_id=LOG_CHANNEL,
+                        text=log_message
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send order success alert to {LOG_CHANNEL}: {e}")
+            else:
+                err_msg = smm_res.get("error") or smm_res.get("message") or "SMM Server Response Error"
+                post_btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔗 View Post", url=post_link)]])
+                try:
+                    await context.bot.send_message(
+                        chat_id=user_chat_id,
+                        text=f"❌ **রিয়্যাকশন অর্ডার প্রদান ব্যর্থ হয়েছে!**\n\n"
+                             f"📢 **চ্যানেল:** {ch_name}\n"
+                             f"⚠️ **কারণ:** `{err_msg}`\n\n"
+                             f"📌 **পোস্ট লিংক:** {post_link}",
+                        reply_markup=post_btn
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send order fail alert: {e}")
+
+        # Send Video Views Order if Views is ON & views_count > 0
+        if view_status == "ON" and views_count > 0:
+            view_res = send_smm_order(post_link, views_count, service_id_override=view_service_id)
+            logger.info(f"📹 Video View Order Response: {view_res}")
 
 # 👑 Admin Handlers
 async def start_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1141,61 +1097,21 @@ async def process_admin_search_user(update: Update, context: ContextTypes.DEFAUL
     u_data = db_get_user(txt)
     if u_data:
         is_b = "হ্যাঁ 🚫" if u_data.get("is_blocked", 0) == 1 else "না ✅"
-        block_action_btn = InlineKeyboardButton("🔓 আনব্লক করুন", callback_data=f"adm_unblock_{u_data['user_id']}") if u_data.get("is_blocked", 0) == 1 else InlineKeyboardButton("🚫 ব্লক করুন", callback_data=f"adm_block_{u_data['user_id']}")
-        
-        kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("➕ কয়েন যোগ / বিয়োগ", callback_data=f"adm_coins_{u_data['user_id']}")],
-            [block_action_btn]
-        ])
-
         text = (
-            f"👤 **ইউজারের সম্পূর্ণ বিবরণ**\n"
+            f"👤 **ইউজারের তথ্য**\n"
             f"───────────────────\n"
             f"🆔 **ইউজার আইডি:** `{u_data['user_id']}`\n"
             f"💰 **ব্যালেন্স:** {u_data['credit']} Coins\n"
-            f"👥 **মোট রেফারেল:** {u_data['ref_count']}\n"
-            f"🎁 **রেফারেল আর্নিং:** {u_data['ref_credit']} Coins\n"
-            f"📁 **সক্রিয় প্রজেক্ট:** {len(u_data.get('projects', []))}\n"
-            f"🚫 **ব্লকড স্ট্যাটাস:** {is_b}\n"
+            f"👥 **রেফারেল:** {u_data['ref_count']}\n"
+            f"📁 **প্রজেক্ট:** {len(u_data.get('projects', []))}\n"
+            f"🚫 **ব্লকড:** {is_b}\n"
             f"───────────────────\n"
-            f"💡 **দ্রুত কয়েন পরিবর্তন করতে মেসেজ দিন:**\n`{u_data['user_id']} 500` (কয়েন যোগ)\n`{u_data['user_id']} -500` (কয়েন বিয়োগ)"
+            f"💡 কয়েন যোগ/বিয়োগ করতে পাঠান: `{u_data['user_id']} Amount` (যেমন: `{u_data['user_id']} 500`)"
         )
         await update.message.reply_text(text, reply_markup=get_admin_keyboard())
-        await update.message.reply_text("👇 **নিচের বাটনসমূহ থেকে অ্যাকশন সিলেক্ট করুন:**", reply_markup=kb)
     else:
         await update.message.reply_text("❌ ডাটাবেজে এই ইউজার আইডিটি পাওয়া যায়নি!", reply_markup=get_admin_keyboard())
     return ConversationHandler.END
-
-async def admin_user_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-
-    if query.from_user.id not in ADMIN_IDS:
-        return
-
-    if data.startswith("adm_block_"):
-        uid = data.split("_")[2]
-        u_data = db_get_user(uid)
-        u_data['is_blocked'] = 1
-        db_save_user(u_data)
-        await query.message.edit_text(f"🚫 **ইউজার `{uid}` সফলভাবে ব্লক করা হয়েছে।**")
-
-    elif data.startswith("adm_unblock_"):
-        uid = data.split("_")[2]
-        u_data = db_get_user(uid)
-        u_data['is_blocked'] = 0
-        db_save_user(u_data)
-        await query.message.edit_text(f"✅ **ইউজার `{uid}` সফলভাবে আনব্লক করা হয়েছে।**")
-
-    elif data.startswith("adm_coins_"):
-        uid = data.split("_")[2]
-        await query.message.reply_text(
-            f"✍️ **কয়েন পরিবর্তন করতে চ্যাটে লিখুন:**\n\n"
-            f"`{uid} 500` (৫০০ কয়েন যোগ করতে)\n"
-            f"`{uid} -200` (২০০ কয়েন কাটতে)",
-            reply_markup=get_admin_keyboard()
-        )
 
 async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
@@ -1447,8 +1363,6 @@ if __name__ == '__main__':
         ],
         states={
             STEP_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_channel)],
-            STEP_DISTRIBUTION: [CallbackQueryHandler(distribution_callback, pattern="^(dist_)")],
-            STEP_SPEED: [CallbackQueryHandler(speed_callback, pattern="^(spd_)")],
             STEP_COUNT: [CallbackQueryHandler(count_callback, pattern="^cnt_")],
             STEP_VIEWS: [CallbackQueryHandler(views_callback, pattern="^vw_")],
             STEP_REVIEW: [
@@ -1479,7 +1393,6 @@ if __name__ == '__main__':
     app.add_handler(channel_handler)
     app.add_handler(conv_handler)
     app.add_handler(CallbackQueryHandler(topup_action_callback, pattern="^topup_"))
-    app.add_handler(CallbackQueryHandler(admin_user_action_callback, pattern="^adm_"))
     app.add_handler(CallbackQueryHandler(project_action_callback, pattern="^(p_|fe_)"))
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
