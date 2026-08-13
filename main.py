@@ -152,10 +152,11 @@ def db_get_setting(key, default_val=""):
     conn.close()
     return row[0] if row else default_val
 
+# 🛠️ FIXED DB_SET_SETTING FUNCTION
 def db_set_setting(key, value):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (k, str(value)))
+    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (str(key), str(value)))
     conn.commit()
     conn.close()
 
@@ -1150,7 +1151,8 @@ async def admin_settings_edit_callback(update: Update, context: ContextTypes.DEF
         
         prompts = {
             "smm_api_key": "🔑 **নতুন SMM Panel API Key পাঠান:**",
-            "smm_service_id": "🧪 **নতুন SMM Service ID পাঠান:**",
+            "smm_service_id": "🧪 **নতুন SMM Reaction Service ID পাঠান:**",
+            "smm_view_service_id": "👁️ **নতুন SMM View Service ID পাঠান:**",
             "coin_rate": "💡 **নতুন Reaction Coin Rate লিখুন:**\n(যেমন: `1` মানে ১ কয়েন = ১টি রিয়েকশন, `0.5` মানে ১ কয়েন = ২টি রিয়েকশন)",
             "dollar_rate": "💵 **নতুন Dollar Rate ($1 = ? Coins) লিখুন:**\n(যেমন: `1000` মানে $1 = 1000 Coins)",
             "referral_bonus": "👥 **রেফারেল বোনাসের নতুন Coins সংখ্যা লিখুন:**\n(যেমন: `100`, `200`)"
