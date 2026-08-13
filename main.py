@@ -289,7 +289,7 @@ def db_update_topup_status(req_id, status):
 (STEP_CHANNEL, STEP_COUNT, STEP_VIEWS, 
  STEP_REVIEW, STEP_EDIT_FIELD, STEP_EDIT_VALUE,
  STEP_ADMIN_SEARCH_USER, STEP_ADMIN_BROADCAST, STEP_ADMIN_EDIT_SETTING,
- STEP_TOPUP_AMOUNT, STEP_TOPUP_TXID, STEP_TOPUP_PHOTO) = range(12)
+ STEP_TOPUP_AMOUNT, STEP_TOPUP_PHOTO) = range(11)
 
 # 🛒 SMM Order Submit Function
 def send_smm_order(link, quantity, service_id_override=None):
@@ -621,7 +621,7 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg_text, reply_markup=get_user_keyboard())
     return ConversationHandler.END
 
-# 💰 Top-up Flow Logic (UPDATED TO REMOVE INSTRUCTION MESSAGE)
+# 💰 Top-up Flow Logic (UPDATED WITHOUT TXID STEP)
 async def start_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = db_get_user(user_id)
@@ -662,25 +662,7 @@ async def save_topup_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         f"💰 **আপনার ডিপোজিট:** ${usd_val} = **{calc_coins} Coins**\n\n"
-        f"👉 **ধাপ ২:** আপনার পেমেন্টের **Transaction ID / Order ID** টি লিখে পাঠান:",
-        reply_markup=cancel_keyboard()
-    )
-    return STEP_TOPUP_TXID
-
-async def save_topup_txid(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    txt = update.message.text.strip()
-    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
-        context.user_data.pop('topup_data', None)
-        await update.message.reply_text("টপ-আপ প্রসেস বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
-        return ConversationHandler.END
-
-    if len(txt) < 3:
-        await update.message.reply_text("❌ সঠিক Transaction ID (TxID) লিখুন:")
-        return STEP_TOPUP_TXID
-
-    context.user_data['topup_data']['txid'] = txt
-    await update.message.reply_text(
-        f"👉 **ধাপ ৩:** আপনার পেমেন্টের **স্ক্রিনশট (Photo)** টি পাঠান:",
+        f"👉 **ধাপ ২:** আপনার পেমেন্টের **স্ক্রিনশট (Photo)** টি পাঠান:",
         reply_markup=cancel_keyboard()
     )
     return STEP_TOPUP_PHOTO
@@ -701,7 +683,7 @@ async def save_topup_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     topup_info = context.user_data.get('topup_data', {})
     amount = topup_info.get('amount', 0)
     usd_amount = topup_info.get('usd_amount', 0)
-    txid = topup_info.get('txid', '')
+    txid = "N/A"
 
     req_id = db_add_topup_request(user_id, txid, photo_id, amount)
     context.user_data.pop('topup_data', None)
@@ -709,8 +691,7 @@ async def save_topup_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await msg.reply_text(
         f"🎉 **আপনার টপ-আপ আবেদন সফলভাবে জমা হয়েছে!**\n\n"
         f"🆔 **আবেদন আইডি:** `#{req_id}`\n"
-        f"💵 **আমোউন্ট:** ${usd_amount} ({amount} Coins)\n"
-        f"💳 **TxID:** `{txid}`\n\n"
+        f"💵 **আমোউন্ট:** ${usd_amount} ({amount} Coins)\n\n"
         f"⏳ অ্যাডমিন যাচাই করে খুব শীঘ্রই আপনার ব্যালেন্স যোগ করে দেবে।",
         reply_markup=get_user_keyboard()
     )
@@ -753,8 +734,7 @@ async def topup_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 chat_id=int(uid),
                 text=f"🎉 **আপনার টপ-আপ আবেদন অনুমোদিত হয়েছে!**\n\n"
                      f"💰 যোগকৃত কয়েন: {amount}\n"
-                     f"💳 বর্তমান ব্যালেন্স: {u_data['credit']} Coins\n"
-                     f"🆔 TxID: `{txid}`"
+                     f"💳 বর্তমান ব্যালেন্স: {u_data['credit']} Coins"
             )
         except Exception as e:
             logger.error(f"Failed to notify user for approved topup: {e}")
@@ -782,7 +762,6 @@ async def topup_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
             await context.bot.send_message(
                 chat_id=int(uid),
                 text=f"❌ **আপনার টপ-আপ আবেদন বাতিল করা হয়েছে!**\n\n"
-                     f"🆔 TxID: `{txid}`\n"
                      f"প্রয়োজনে এডমিনের সাথে যোগাযোগ করুন।"
             )
         except Exception as e:
@@ -1213,7 +1192,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"───────────────────\n"
                     f"👤 **ইউজার আইডি:** `{uid}`\n"
                     f"💰 **আবেদনের কয়েন:** {amount}\n"
-                    f"🆔 **TxID:** `{txid}`\n"
                     f"📅 **তারিখ:** {created_at}"
                 )
                 kb = InlineKeyboardMarkup([
@@ -1374,7 +1352,6 @@ if __name__ == '__main__':
             STEP_ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_broadcast)],
             STEP_ADMIN_EDIT_SETTING: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_edit_setting)],
             STEP_TOPUP_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_topup_amount)],
-            STEP_TOPUP_TXID: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_topup_txid)],
             STEP_TOPUP_PHOTO: [
                 MessageHandler(filters.PHOTO, save_topup_photo),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, save_topup_photo)
