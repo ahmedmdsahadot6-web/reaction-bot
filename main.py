@@ -621,7 +621,7 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg_text, reply_markup=get_user_keyboard())
     return ConversationHandler.END
 
-# 💰 Top-up Flow Logic
+# 💰 Top-up Flow Logic (UPDATED TO REMOVE INSTRUCTION MESSAGE)
 async def start_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = db_get_user(user_id)
@@ -634,9 +634,6 @@ async def start_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💎 **আপনার বর্তমান ব্যালেন্স:** {u_data['credit']} coins\n"
         f"💵 **রেট:** $1 = {dollar_rate} Coins\n\n"
         f"🟡 **Binance Pay ID:** `{binance_pay_id}`\n\n"
-        f"💳 **টপ-আপ করার নিয়ম:**\n"
-        f"১) উপরে দেওয়া Binance Pay ID তে ডলার সেন্ড করুন।\n"
-        f"২) সেন্ড করার পর নিচে ডলারের পরিমাণ, Order ID/TxID এবং স্ক্রিনশট জমা দিন।\n\n"
         f"👉 **ধাপ ১:** কত ডলার ডিপোজিট করেছেন তা লিখুন (যেমন: `1`, `5`, `10`):"
     )
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=cancel_keyboard())
@@ -791,7 +788,7 @@ async def topup_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
         except Exception as e:
             logger.error(f"Failed to notify user for rejected topup: {e}")
 
-# 🛠️ Project Action Callback (UPDATED WITH REACTION & VIEWS ON/OFF)
+# 🛠️ Project Action Callback
 async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -909,7 +906,7 @@ async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return ConversationHandler.END
 
-# 📂 Display Projects function (UPDATED FOR SETTINGS)
+# 📂 Display Projects function
 async def show_my_projects(message_obj, user_id):
     u_data = db_get_user(user_id)
     projects = u_data.get('projects', [])
@@ -961,7 +958,7 @@ async def show_order_list(message_obj, user_id):
         )
     await message_obj.reply_text(text, disable_web_page_preview=True)
 
-# 🚀 Core Auto-Reaction Post Monitor (UPDATED FOR ON/OFF LOGIC)
+# 🚀 Core Auto-Reaction Post Monitor
 async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.channel_post or update.edited_channel_post
     if not msg or not msg.chat:
