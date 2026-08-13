@@ -93,9 +93,20 @@ def init_db():
             channel_name TEXT,
             count INTEGER,
             post_link TEXT,
+            order_type TEXT DEFAULT 'Reacts',
+            status TEXT DEFAULT 'completed',
             created_at TEXT
         )
     ''')
+    
+    # Auto migration if order_type or status doesn't exist in orders
+    cursor.execute("PRAGMA table_info(orders)")
+    columns = [column[1] for column in cursor.fetchall()]
+    if 'order_type' not in columns:
+        cursor.execute("ALTER TABLE orders ADD COLUMN order_type TEXT DEFAULT 'Reacts'")
+    if 'status' not in columns:
+        cursor.execute("ALTER TABLE orders ADD COLUMN status TEXT DEFAULT 'completed'")
+
     # Top-up Requests Table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS topup_requests (
@@ -144,7 +155,7 @@ def db_get_setting(key, default_val=""):
 def db_set_setting(key, value):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (k, str(value)))
     conn.commit()
     conn.close()
 
@@ -220,14 +231,14 @@ def db_get_all_users():
         }
     return users
 
-def db_add_order(user_id, order_id, channel_name, count, post_link):
+def db_add_order(user_id, order_id, channel_name, count, post_link, order_type="Reacts", status="completed"):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute('''
-        INSERT INTO orders (user_id, order_id, channel_name, count, post_link, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (str(user_id), str(order_id), channel_name, count, post_link, now_str))
+        INSERT INTO orders (user_id, order_id, channel_name, count, post_link, order_type, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (str(user_id), str(order_id), channel_name, count, post_link, order_type, status, now_str))
     conn.commit()
     conn.close()
 
@@ -238,6 +249,17 @@ def db_get_user_orders(user_id, limit=10):
         SELECT order_id, channel_name, count, post_link, created_at
         FROM orders WHERE user_id = ? ORDER BY id DESC LIMIT ?
     ''', (str(user_id), limit))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+def db_get_all_bot_orders(limit=50):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT order_id, order_type, status
+        FROM orders ORDER BY id DESC LIMIT ?
+    ''', (limit,))
     rows = cursor.fetchall()
     conn.close()
     return rows
@@ -621,7 +643,7 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg_text, reply_markup=get_user_keyboard())
     return ConversationHandler.END
 
-# 💰 Top-up Flow Logic (UPDATED WITHOUT TXID STEP)
+# 💰 Top-up Flow Logic
 async def start_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = db_get_user(user_id)
@@ -1025,7 +1047,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                 order_id = smm_res["order"]
                 uinfo["credit"] -= needed_coins
                 db_save_user(uinfo)
-                db_add_order(uid, order_id, ch_name, reaction_count, post_link)
+                db_add_order(uid, order_id, ch_name, reaction_count, post_link, order_type="Reacts", status="completed")
 
                 log_message = (
                     f" ORDER UPDATE\n"
@@ -1060,6 +1082,8 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
         if view_status == "ON" and views_count > 0:
             view_res = send_smm_order(post_link, views_count, service_id_override=view_service_id)
             logger.info(f"📹 Video View Order Response: {view_res}")
+            if view_res and "order" in view_res:
+                db_add_order(uid, view_res["order"], ch_name, views_count, post_link, order_type="Views", status="completed")
 
 # 👑 Admin Handlers
 async def start_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1178,6 +1202,18 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text == "📊 Admin Dashboard":
             return await update.message.reply_text("📊 **অ্যাডমিন ড্যাশবোর্ড সেটিংস:**", reply_markup=get_admin_dashboard_keyboard())
         
+        elif text == "🤖 Bot Orders":
+            bot_orders = db_get_all_bot_orders(50)
+            if not bot_orders:
+                return await update.message.reply_text("🤖 **Bot Orders**\n\n❌ কোন অর্ডার পাওয়া যায়নি।", reply_markup=get_admin_dashboard_keyboard())
+            
+            res_text = "Bot Orders\n\n"
+            for order in bot_orders:
+                oid, otype, ostatus = order
+                res_text += f"#{oid}|{otype}|{ostatus}\n"
+            
+            return await update.message.reply_text(res_text, reply_markup=get_admin_dashboard_keyboard())
+
         elif text == "📋 All Orders":
             pending_topups = db_get_pending_topups()
             if not pending_topups:
@@ -1269,7 +1305,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=kb
             )
 
-        elif text in ["🤖 Bot Orders", "💰 Telegram Super Service", 
+        elif text in ["💰 Telegram Super Service", 
                       "🔄 Replace OFF ❌", "♻️ Refill OFF ❌", "❌ Canceled", 
                       "⚠️ Failed/Partial"]:
             return await update.message.reply_text(f"⚙️ **{text}** অপশনটি সিলেক্ট করা হয়েছে।", reply_markup=get_admin_dashboard_keyboard())
