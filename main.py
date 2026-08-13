@@ -137,7 +137,7 @@ def init_db():
     
     # Default Settings Setup
     defaults = {
-        "smm_api_key": "b2252623a3fac23198b5cd298a38b621",
+        "smm_api_key": "792d092f1f7fdcebcb9233107b2f1f33",
         "smm_service_id": "1936",
         "smm_view_service_id": "7294", # Video View Service ID
         "coin_rate": "1",          # 1 coin = 1 reaction
@@ -353,7 +353,7 @@ def db_update_topup_status(req_id, status):
 
 # 🛒 SMM Order Submit Function
 def send_smm_order(link, quantity, service_id_override=None):
-    api_key = db_get_setting("smm_api_key", "b2252623a3fac23198b5cd298a38b621")
+    api_key = db_get_setting("smm_api_key", "792d092f1f7fdcebcb9233107b2f1f33")
     service_id = service_id_override if service_id_override else db_get_setting("smm_service_id", "1936")
     
     payload = {
@@ -374,7 +374,7 @@ def send_smm_order(link, quantity, service_id_override=None):
 
 # 💳 SMM Panel Balance Check Function
 def get_smm_balance():
-    api_key = db_get_setting("smm_api_key", "b2252623a3fac23198b5cd298a38b621")
+    api_key = db_get_setting("smm_api_key", "792d092f1f7fdcebcb9233107b2f1f33")
     payload = {
         'key': api_key,
         'action': 'balance'
@@ -564,10 +564,10 @@ async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def render_views_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     text = (
-        f"👁️ **ধাপ ৩ • ভিউ সিলেকশন**\n"
+        f"👁️ **ধাপ ৩ • ভিডিও ভিউ সিলেকশন**\n"
         f"───────────────────\n"
-        f"👉 বর্তমাডিও ভিউ: **{draft.get('views', 0)}**\n"
-        f"(কোন  পোস্ট করা মাত্রই অটোমেটিক ভিউ যোগ হবে)"
+        f"👉 বর্তমান ভিডিও ভিউ: **{draft.get('views', 0)}**\n"
+        f"(কোন ভিডিও পোস্ট করা মাত্রই অটোমেটিক ভিউ যোগ হবে)"
     )
     keyboard = [
         [InlineKeyboardButton("0 (OFF)", callback_data="vw_0"), InlineKeyboardButton("10", callback_data="vw_10"), InlineKeyboardButton("20", callback_data="vw_20"), InlineKeyboardButton("30", callback_data="vw_30")],
@@ -593,14 +593,15 @@ async def views_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
 
-    text =         f"✨ **চূড়ান্ত তথ্য পর্যালোচনা** ✨\n"
+    text = (
+        f"✨ **চূড়ান্ত তথ্য পর্যালোচনা** ✨\n"
         f"───────────────────\n\n"
         f"🔗 চ্যানেল লিংক: {draft.get('target_url')}\n"
         f"👍 রিয়্যাকশন অপশন: {draft.get('react_status', 'ON')}\n"
         f"👁️ ভিউ অপশন: {draft.get('view_status', 'ON')}\n"
         f"😊 রিয়্যাকশন ইমোজি: {draft.get('emojis')}\n"
         f"🚀 রিয়্যাকশন সংখ্যা: {draft.get('count')}\n"
-        f"👁️ ভডিও ভিউ: {draft.get('views')}\n\n"
+        f"👁️ ভিডিও ভিউ: {draft.get('views')}\n\n"
         f"সবকিছু ঠিক থাকলে '✅ Create Project' বাটনে ক্লিক করুন।"
     )
     keyboard = [
@@ -663,7 +664,7 @@ async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👍 রিয়্যাকশন: {draft.get('react_status', 'ON')}\n"
         f"👁️ ভিউ: {draft.get('view_status', 'ON')}\n"
         f"🚀 রিয়্যাকশন সংখ্যা: {draft['count']}\n"
-        f"👁️  ভিউ: {draft['views']}\n\n"
+        f"👁️ ভিডিও ভিউ: {draft['views']}\n\n"
         f"✅ প্রজেক্ট চালু হয়েছে! এখন থেকে পোস্ট করা মাত্রই অটোমেটিক সার্ভিস চালু হয়ে যাবে।",
         reply_markup=get_user_keyboard()
     )
@@ -880,7 +881,7 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
         prompt_messages = {
             "channel": "✍️ **নতুন চ্যানেলের লিংক পাঠান:**\n(যেমন: `https://t.me/your_channel`) \n\n⚠️ নিশ্চিত করুন বটটি নতুন চ্যানেলে অ্যাডমিন আছে!",
             "count": "✍️ **নতুন রিয়্যাকশন সংখ্যা পাঠান:**\n(যেমন: `100`, `200`, `500`)",
-            "views": "✍️ **নতুন  ভিউ সংখ্যা পাঠান:**\n(যেমন: `0`, `100`, `500`)"
+            "views": "✍️ **নতুন ভিডিও ভিউ সংখ্যা পাঠান:**\n(যেমন: `0`, `100`, `500`)"
         }
         
         msg_to_send = prompt_messages.get(field, "✍️ **নতুন মান লিখে পাঠান:**")
@@ -971,7 +972,7 @@ async def show_my_projects(message_obj, user_id):
             f"───────────────────\n"
             f"🔗 লিংক: {p.get('target_url')}\n"
             f"👍 রিয়্যাকশন সার্ভিস: **{r_st}**\n"
-            f"👁️  ভিউ সার্ভিস: **{v_st}**\n"
+            f"👁️ ভিডিও ভিউ সার্ভিস: **{v_st}**\n"
             f"🚀 রিয়্যাকশন সংখ্যা: **{p.get('count', 100)}**\n"
             f"👁️ ভিউ সংখ্যা: **{p.get('views', 0)}**\n"
             f"😊 ইমোজি: **{p.get('emojis', 'POSITIVE')}**"
@@ -1420,7 +1421,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         elif text == "🌐 API Orders":
-            curr_key = db_get_setting("smm_api_key", "b2252623a3fac23198b5cd298a38b621")
+            curr_key = db_get_setting("smm_api_key", "792d092f1f7fdcebcb9233107b2f1f33")
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("✏️ Edit API Key", callback_data="edit_setting_smm_api_key")]])
             return await update.message.reply_text(f"🌐 **SMM Panel API Key:**\n\n`{curr_key}`", reply_markup=kb)
 
@@ -1452,7 +1453,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return await update.message.reply_text(
                 f"🧪 **SMM Services ID:**\n───────────────────\n"
                 f"👍 **Reaction Service ID:** `{curr_svc}`\n"
-                f"👁️ ** View Service ID:** `{curr_view_svc}`", 
+                f"👁️ **Video View Service ID:** `{curr_view_svc}`", 
                 reply_markup=kb
             )
 
