@@ -473,7 +473,7 @@ async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
     await update.message.reply_text(text, reply_markup=get_admin_keyboard())
 
-# --- ⚙️ UPDATED SETUP LOGIC (EDIT MESSAGE INSTEAD OF SENDING NEW ONES) ---
+# --- ⚙️ SETUP LOGIC ---
 
 def build_setup_dashboard_markup_and_text(context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
@@ -554,7 +554,6 @@ async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text, kb = build_setup_dashboard_markup_and_text(context)
     msg = await update.message.reply_text(text, reply_markup=kb)
     
-    # Store Setup Message ID & Chat ID to edit later
     context.user_data['setup_msg_id'] = msg.message_id
     context.user_data['setup_chat_id'] = msg.chat_id
     return STEP_SETUP_DASHBOARD
@@ -593,7 +592,7 @@ async def setup_dashboard_callback(update: Update, context: ContextTypes.DEFAULT
             chat_info = await context.bot.get_chat(f"@{ch_username}")
             channel_id = str(chat_info.id)
             channel_title = chat_info.title or ch_username
-        except Exception as e:
+        except Exception:
             channel_id = f"channel_{ch_username}"
             channel_title = ch_username
 
@@ -625,12 +624,8 @@ async def setup_dashboard_callback(update: Update, context: ContextTypes.DEFAULT
 
 async def handle_input_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (update.message.text or "").strip()
-    
-    # Delete user input message to keep chat clean
-    try:
-        await update.message.delete()
-    except Exception:
-        pass
+    try: await update.message.delete()
+    except Exception: pass
 
     if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
         context.user_data.pop('draft_project', None)
@@ -639,7 +634,6 @@ async def handle_input_channel(update: Update, context: ContextTypes.DEFAULT_TYP
 
     clean_uname = txt.replace("https://t.me/", "").replace("@", "").strip()
     if not clean_uname:
-        # Update setup message to prompt error
         setup_msg_id = context.user_data.get('setup_msg_id')
         chat_id = context.user_data.get('setup_chat_id')
         if setup_msg_id and chat_id:
@@ -653,18 +647,13 @@ async def handle_input_channel(update: Update, context: ContextTypes.DEFAULT_TYP
     draft['username'] = clean_uname
     draft['target_url'] = f"https://t.me/{clean_uname}"
 
-    # Update Setup message back to main dashboard
     await update_setup_message(context)
     return STEP_SETUP_DASHBOARD
 
 async def handle_input_views(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (update.message.text or "").strip()
-    
-    # Delete user input message
-    try:
-        await update.message.delete()
-    except Exception:
-        pass
+    try: await update.message.delete()
+    except Exception: pass
 
     if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
         context.user_data.pop('draft_project', None)
@@ -684,18 +673,13 @@ async def handle_input_views(update: Update, context: ContextTypes.DEFAULT_TYPE)
     draft = context.user_data.get('draft_project', {})
     draft['views'] = int(txt)
 
-    # Update Setup message back to main dashboard
     await update_setup_message(context)
     return STEP_SETUP_DASHBOARD
 
 async def handle_input_reacts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (update.message.text or "").strip()
-    
-    # Delete user input message
-    try:
-        await update.message.delete()
-    except Exception:
-        pass
+    try: await update.message.delete()
+    except Exception: pass
 
     if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
         context.user_data.pop('draft_project', None)
@@ -715,7 +699,6 @@ async def handle_input_reacts(update: Update, context: ContextTypes.DEFAULT_TYPE
     draft = context.user_data.get('draft_project', {})
     draft['count'] = int(txt)
 
-    # Update Setup message back to main dashboard
     await update_setup_message(context)
     return STEP_SETUP_DASHBOARD
 
@@ -761,8 +744,7 @@ async def save_topup_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     try:
         usd_val = float(txt)
-        if usd_val <= 0:
-            raise ValueError
+        if usd_val <= 0: raise ValueError
     except ValueError:
         await update.message.reply_text("❌ অকার্যকর পরিমাণ! শুধুমাত্র সঠিক সংখ্যা লিখুন (যেমন: 1, 5, 10):")
         return STEP_TOPUP_AMOUNT
@@ -880,6 +862,25 @@ async def topup_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
         except Exception as e:
             logger.error(f"Failed to notify user for rejected topup: {e}")
 
+# 🛠️ Project Action Entry Handler
+async def start_project_edit_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    parts = data.split("_")
+    idx, field = int(parts[1]), parts[2]
+    context.user_data['edit_target'] = {'idx': idx, 'field': field}
+    
+    prompt_messages = {
+        "channel": "✍️ **নতুন চ্যানেলের লিংক পাঠান:**\n(যেমন: `https://t.me/your_channel`) \n\n⚠️ নিশ্চিত করুন বটটি নতুন চ্যানেলে অ্যাডমিন আছে!",
+        "count": "✍️ **নতুন রিয়্যাকশন সংখ্যা পাঠান:**\n(যেমন: `100`, `200`, `500`)",
+        "views": "✍️ **নতুন ভিউ সংখ্যা পাঠান:**\n(যেমন: `0`, `100`, `500`)"
+    }
+    
+    msg_to_send = prompt_messages.get(field, "✍️ **নতুন মান লিখে পাঠান:**")
+    await query.message.reply_text(msg_to_send, reply_markup=cancel_keyboard())
+    return STEP_EDIT_VALUE
+
 # 🛠️ Project Action Callback
 async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -923,26 +924,9 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
                 f"কোন অপশনটি পরিবর্তন করতে চান সিলেক্ট করুন:",
                 reply_markup=InlineKeyboardMarkup(kb)
             )
-            return STEP_EDIT_FIELD
-
-    elif data.startswith("fe_"):
-        parts = data.split("_")
-        idx, field = int(parts[1]), parts[2]
-        context.user_data['edit_target'] = {'idx': idx, 'field': field}
-        
-        prompt_messages = {
-            "channel": "✍️ **নতুন চ্যানেলের লিংক পাঠান:**\n(যেমন: `https://t.me/your_channel`) \n\n⚠️ নিশ্চিত করুন বটটি নতুন চ্যানেলে অ্যাডমিন আছে!",
-            "count": "✍️ **নতুন রিয়্যাকশন সংখ্যা পাঠান:**\n(যেমন: `100`, `200`, `500`)",
-            "views": "✍️ **নতুন ভিউ সংখ্যা পাঠান:**\n(যেমন: `0`, `100`, `500`)"
-        }
-        
-        msg_to_send = prompt_messages.get(field, "✍️ **নতুন মান লিখে পাঠান:**")
-        await query.message.reply_text(msg_to_send, reply_markup=cancel_keyboard())
-        return STEP_EDIT_VALUE
 
     elif data == "p_back":
         await show_my_projects(query.message, user_id)
-        return ConversationHandler.END
 
 async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     val_txt = update.message.text.strip()
@@ -976,7 +960,7 @@ async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 projects[idx]['channel_name'] = chat_info.title or clean_uname
                 projects[idx]['target_url'] = f"https://t.me/{clean_uname}"
                 projects[idx]['username'] = clean_uname
-            except Exception as e:
+            except Exception:
                 projects[idx]['channel_id'] = f"channel_{clean_uname}"
                 projects[idx]['channel_name'] = clean_uname
                 projects[idx]['target_url'] = f"https://t.me/{clean_uname}"
@@ -1116,7 +1100,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             clean_cid = raw_channel_id.replace("-100", "")
             post_link = f"https://t.me/c/{clean_cid}/{post_id}"
 
-        # Send Reaction Order if Reaction is ON
+        # Send Reaction Order
         if react_status == "ON":
             if uinfo.get("credit", 0) < needed_react_coins:
                 try:
@@ -1169,7 +1153,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                     except Exception as e:
                         logger.error(f"Failed to send order fail alert: {e}")
 
-        # Send Views Order if Views is ON & views_count > 0
+        # Send Views Order
         if view_status == "ON" and views_count > 0:
             if uinfo.get("credit", 0) < needed_view_coins:
                 try:
@@ -1252,7 +1236,31 @@ async def process_admin_search_user(update: Update, context: ContextTypes.DEFAUL
         await update.message.reply_text("❌ ডাটাবেজে এই ইউজার আইডিটি পাওয়া যায়নি!", reply_markup=get_admin_keyboard())
     return ConversationHandler.END
 
-# Admin Inline Action Callback (Add, Deduct, Ban, Orders)
+# Admin Inline Action Callback (Add, Deduct, Ban, Orders Entry Handlers)
+async def start_admin_add_coins_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    parts = query.data.split("_")
+    target_uid = parts[2]
+    context.user_data['admin_action_target'] = target_uid
+    await query.message.reply_text(
+        f"➕ **ইউজার ID `{target_uid}` এর সাথে কত কয়েন যোগ করতে চান লিখুন:**",
+        reply_markup=cancel_keyboard()
+    )
+    return STEP_ADMIN_ADD_COINS
+
+async def start_admin_deduct_coins_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    parts = query.data.split("_")
+    target_uid = parts[2]
+    context.user_data['admin_action_target'] = target_uid
+    await query.message.reply_text(
+        f"➖ **ইউজার ID `{target_uid}` এর অ্যাকাউন্ট থেকে কত কয়েন কাটতে চান লিখুন:**",
+        reply_markup=cancel_keyboard()
+    )
+    return STEP_ADMIN_DEDUCT_COINS
+
 async def admin_user_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1264,23 +1272,7 @@ async def admin_user_action_callback(update: Update, context: ContextTypes.DEFAU
     action = parts[1]
     target_uid = parts[2]
 
-    if action == "add":
-        context.user_data['admin_action_target'] = target_uid
-        await query.message.reply_text(
-            f"➕ **ইউজার ID `{target_uid}` এর সাথে কত কয়েন যোগ করতে চান লিখুন:**",
-            reply_markup=cancel_keyboard()
-        )
-        return STEP_ADMIN_ADD_COINS
-
-    elif action == "deduct":
-        context.user_data['admin_action_target'] = target_uid
-        await query.message.reply_text(
-            f"➖ **ইউজার ID `{target_uid}` এর অ্যাকাউন্ট থেকে কত কয়েন কাটতে চান লিখুন:**",
-            reply_markup=cancel_keyboard()
-        )
-        return STEP_ADMIN_DEDUCT_COINS
-
-    elif action == "ban":
+    if action == "ban":
         u_data = db_get_user(target_uid)
         if u_data:
             current_block = u_data.get("is_blocked", 0)
@@ -1485,7 +1477,7 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
             ])
             try:
                 await query.message.reply_photo(photo=photo_id, caption=caption_text, reply_markup=kb)
-            except Exception as e:
+            except Exception:
                 await query.message.reply_text(f"{caption_text}\n\n⚠️ ছবি দেখতে সমস্যা হচ্ছে।", reply_markup=kb)
         return
 
@@ -1555,7 +1547,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text and text.lower() in ["admin", "অ্যাডমিন"]:
         return await admin_panel_command(update, context)
 
-    # Check for direct Admin Credit addition format: "USER_ID AMOUNT"
+    # Direct Admin Credit addition: "USER_ID AMOUNT"
     if user_id in ADMIN_IDS and len(text.split()) == 2:
         parts = text.split()
         if parts[0].isdigit() and (parts[1].isdigit() or (parts[1].startswith('-') and parts[1][1:].isdigit())):
@@ -1624,7 +1616,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"👤 **ইউজার প্রোফাইল**\n───────────────────\n"
             f"🆔 ইউজার আইডি: `{str_id}`\n"
             f"💰 কয়েন ব্যালেন্স: {u_data['credit']}\n"
-            f"💵 মোট খরচ: {spent_coins}\n"
+            f"💵 মোট খরচ:{spent_coins}\n"
             f"📁 সক্রিয় প্রজেক্ট: {len(u_data['projects'])}\n"
             f"👥 মোট রেফারেল: {u_data['ref_count']}\n"
             f"🎁 রেফারেল ইনকাম: {u_data['ref_credit']} coins"
@@ -1671,16 +1663,16 @@ if __name__ == '__main__':
             MessageHandler(filters.Regex("^💰 Top-up$"), start_topup),
             MessageHandler(filters.Regex("^👤 Search User$"), start_search_user),
             MessageHandler(filters.Regex("^📢 Send SMS$"), start_broadcast),
-            CallbackQueryHandler(project_action_callback, pattern="^p_edit_"),
+            CallbackQueryHandler(start_project_edit_entry, pattern="^fe_"),
             CallbackQueryHandler(admin_settings_edit_callback, pattern="^edit_setting_"),
-            CallbackQueryHandler(admin_user_action_callback, pattern="^uact_")
+            CallbackQueryHandler(start_admin_add_coins_entry, pattern="^uact_add_"),
+            CallbackQueryHandler(start_admin_deduct_coins_entry, pattern="^uact_deduct_")
         ],
         states={
             STEP_SETUP_DASHBOARD: [CallbackQueryHandler(setup_dashboard_callback, pattern="^setup_btn_")],
             STEP_INPUT_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_channel)],
             STEP_INPUT_VIEWS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_views)],
             STEP_INPUT_REACTS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_reacts)],
-            STEP_EDIT_FIELD: [CallbackQueryHandler(project_action_callback, pattern="^fe_")],
             STEP_EDIT_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_value)],
             STEP_ADMIN_SEARCH_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_search_user)],
             STEP_ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_broadcast)],
@@ -1697,13 +1689,16 @@ if __name__ == '__main__':
             CommandHandler('start', start), 
             MessageHandler(filters.Regex("^(❌ Cancel|Cancel|❌ বাতিল করুন|বাতিল করুন)$"), cancel_flow),
             CallbackQueryHandler(cancel_flow, pattern="^cancel_flow$")
-        ]
+        ],
+        per_message=False
     )
 
     channel_handler = MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post)
     
     app.add_handler(channel_handler)
     app.add_handler(conv_handler)
+    
+    # Independent Callback Handlers (outside conversation logic)
     app.add_handler(CallbackQueryHandler(topup_action_callback, pattern="^topup_"))
     app.add_handler(CallbackQueryHandler(admin_user_action_callback, pattern="^uact_"))
     app.add_handler(CallbackQueryHandler(project_action_callback, pattern="^(p_|fe_)"))
