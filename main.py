@@ -428,7 +428,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_data = db_get_user(str_id, username_val=username)
 
     if u_data.get("is_blocked", 0) == 1:
-        await update.message.reply_text("🚫 আপনাকে এই বটটি ব্যবহার করা থেকে ব্লক করা হয়েছে।")
+        await update.message.reply_text("🚫 You are blocked from using this bot.")
         return
 
     if context.args and len(context.args) > 0:
@@ -449,7 +449,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 db_save_user(ref_data)
 
     await update.message.reply_text(
-        "👋 স্বাগতম!\n"
+        "👋 Welcome!\n"
         "Telegram Super Service\n\n"
         "📢 https://t.me/orderchannelsuperfast",
         reply_markup=get_user_keyboard()
@@ -458,22 +458,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in ADMIN_IDS:
-        await update.message.reply_text("❌ আপনি অ্যাডমিন নন!")
+        await update.message.reply_text("❌ You are not an admin!")
         return
 
     all_users = db_get_all_users()
     blocked_count = sum(1 for u in all_users.values() if u.get("is_blocked", 0) == 1)
 
     text = (
-        f"📊 **অ্যাডমিন প্যানেল**\n"
+        f"📊 **Admin Panel**\n"
         f"───────────────────\n"
-        f"👥 মোট ইউজার: {len(all_users)}\n"
-        f"🚫 ব্লকড ইউজার: {blocked_count}\n"
+        f"👥 Total Users: {len(all_users)}\n"
+        f"🚫 Blocked Users: {blocked_count}\n"
         f"───────────────────"
     )
     await update.message.reply_text(text, reply_markup=get_admin_keyboard())
 
-# --- ⚙️ UPDATED SETUP LOGIC (EDIT MESSAGE INSTEAD OF SENDING NEW ONES) ---
+# --- ⚙️ SETUP LOGIC ---
 
 def build_setup_dashboard_markup_and_text(context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
@@ -537,7 +537,7 @@ async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if u_data['credit'] <= 0:
         clean_admin = ADMIN_USERNAME.replace("@", "")
         inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 Contact Admin", url=f"https://t.me/{clean_admin}")]])
-        await update.message.reply_text("⚠️ আপনার পর্যাপ্ত কয়েন নেই!\nনতুন প্রজেক্ট তৈরি করতে দয়া করে রিচার্জ করুন।", reply_markup=inline_kb)
+        await update.message.reply_text("⚠️ You don't have enough coins!\nPlease recharge to create a new project.", reply_markup=inline_kb)
         return ConversationHandler.END
 
     context.user_data['draft_project'] = {
@@ -554,7 +554,6 @@ async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text, kb = build_setup_dashboard_markup_and_text(context)
     msg = await update.message.reply_text(text, reply_markup=kb)
     
-    # Store Setup Message ID & Chat ID to edit later
     context.user_data['setup_msg_id'] = msg.message_id
     context.user_data['setup_chat_id'] = msg.chat_id
     return STEP_SETUP_DASHBOARD
@@ -565,25 +564,25 @@ async def setup_dashboard_callback(update: Update, context: ContextTypes.DEFAULT
     data = query.data
 
     if data == "setup_btn_channel":
-        await query.edit_message_text("🔗 চ্যানেলের ইউজারনেম দিন। যেমন: @YourChannel")
+        await query.edit_message_text("🔗 Send channel username. Example: @YourChannel")
         return STEP_INPUT_CHANNEL
 
     elif data == "setup_btn_views":
         view_rate = float(db_get_setting("view_coin_rate", "4.8"))
         coins_1000 = int(1000 * view_rate)
-        await query.edit_message_text(f"👀 কত Views?\n(1000 Views = {coins_1000} Coins)\nসংখ্যা লিখুন:")
+        await query.edit_message_text(f"👀 How many Views?\n(1000 Views = {coins_1000} Coins)\nEnter amount:")
         return STEP_INPUT_VIEWS
 
     elif data == "setup_btn_reacts":
         react_rate = float(db_get_setting("coin_rate", "4.8"))
         coins_1000 = int(1000 * react_rate)
-        await query.edit_message_text(f"❤️ কত Reacts?\n(1000 Reacts = {coins_1000} Coins)\nসংখ্যা লিখুন:")
+        await query.edit_message_text(f"❤️ How many Reacts?\n(1000 Reacts = {coins_1000} Coins)\nEnter amount:")
         return STEP_INPUT_REACTS
 
     elif data == "setup_btn_save":
         draft = context.user_data.get('draft_project', {})
         if not draft.get('username') or draft.get('views') is None or draft.get('count') is None:
-            await query.answer("❌ সেটআপ সম্পূর্ণ হয়নি! দয়া করে Channel Link, Views এবং Reacts অপশনগুলো সেট করুন।", show_alert=True)
+            await query.answer("❌ Setup incomplete! Please configure Channel Link, Views, and Reacts.", show_alert=True)
             return STEP_SETUP_DASHBOARD
 
         user_id = query.from_user.id
@@ -626,26 +625,24 @@ async def setup_dashboard_callback(update: Update, context: ContextTypes.DEFAULT
 async def handle_input_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (update.message.text or "").strip()
     
-    # Delete user input message to keep chat clean
     try:
         await update.message.delete()
     except Exception:
         pass
 
-    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+    if txt in ["❌ Cancel", "Cancel"]:
         context.user_data.pop('draft_project', None)
-        await update.message.reply_text("প্রসেস বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
+        await update.message.reply_text("Process cancelled.", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
     clean_uname = txt.replace("https://t.me/", "").replace("@", "").strip()
     if not clean_uname:
-        # Update setup message to prompt error
         setup_msg_id = context.user_data.get('setup_msg_id')
         chat_id = context.user_data.get('setup_chat_id')
         if setup_msg_id and chat_id:
             await context.bot.edit_message_text(
                 chat_id=chat_id, message_id=setup_msg_id,
-                text="❌ অকার্যকর ইউজারনেম! সঠিক ইউজারনেম দিন। যেমন: @YourChannel"
+                text="❌ Invalid username! Please enter a valid username. Example: @YourChannel"
             )
         return STEP_INPUT_CHANNEL
 
@@ -653,22 +650,20 @@ async def handle_input_channel(update: Update, context: ContextTypes.DEFAULT_TYP
     draft['username'] = clean_uname
     draft['target_url'] = f"https://t.me/{clean_uname}"
 
-    # Update Setup message back to main dashboard
     await update_setup_message(context)
     return STEP_SETUP_DASHBOARD
 
 async def handle_input_views(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (update.message.text or "").strip()
     
-    # Delete user input message
     try:
         await update.message.delete()
     except Exception:
         pass
 
-    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+    if txt in ["❌ Cancel", "Cancel"]:
         context.user_data.pop('draft_project', None)
-        await update.message.reply_text("প্রসেস বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
+        await update.message.reply_text("Process cancelled.", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
     if not txt.isdigit():
@@ -677,29 +672,27 @@ async def handle_input_views(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if setup_msg_id and chat_id:
             await context.bot.edit_message_text(
                 chat_id=chat_id, message_id=setup_msg_id,
-                text="❌ দয়া করে একটি সঠিক সংখ্যা লিখুন!"
+                text="❌ Please enter a valid number!"
             )
         return STEP_INPUT_VIEWS
 
     draft = context.user_data.get('draft_project', {})
     draft['views'] = int(txt)
 
-    # Update Setup message back to main dashboard
     await update_setup_message(context)
     return STEP_SETUP_DASHBOARD
 
 async def handle_input_reacts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (update.message.text or "").strip()
     
-    # Delete user input message
     try:
         await update.message.delete()
     except Exception:
         pass
 
-    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+    if txt in ["❌ Cancel", "Cancel"]:
         context.user_data.pop('draft_project', None)
-        await update.message.reply_text("প্রসেস বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
+        await update.message.reply_text("Process cancelled.", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
     if not txt.isdigit():
@@ -708,14 +701,13 @@ async def handle_input_reacts(update: Update, context: ContextTypes.DEFAULT_TYPE
         if setup_msg_id and chat_id:
             await context.bot.edit_message_text(
                 chat_id=chat_id, message_id=setup_msg_id,
-                text="❌ দয়া করে একটি সঠিক সংখ্যা লিখুন!"
+                text="❌ Please enter a valid number!"
             )
         return STEP_INPUT_REACTS
 
     draft = context.user_data.get('draft_project', {})
     draft['count'] = int(txt)
 
-    # Update Setup message back to main dashboard
     await update_setup_message(context)
     return STEP_SETUP_DASHBOARD
 
@@ -727,7 +719,7 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('admin_edit_key', None)
     context.user_data.pop('topup_data', None)
     context.user_data.pop('admin_action_target', None)
-    msg_text = "প্রসেস বাতিল করা হয়েছে।"
+    msg_text = "Process cancelled."
     if update.callback_query:
         await update.callback_query.message.reply_text(msg_text, reply_markup=get_user_keyboard())
     else:
@@ -744,19 +736,19 @@ async def start_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['topup_data'] = {}
     
     text = (
-        f"💎 **আপনার বর্তমান ব্যালেন্স:** {u_data['credit']} coins\n"
-        f"💵 **রেট:** $1 = {dollar_rate} Coins\n\n"
+        f"💎 **Your Current Balance:** {u_data['credit']} coins\n"
+        f"💵 **Rate:** $1 = {dollar_rate} Coins\n\n"
         f"🟡 **Binance Pay ID:** `{binance_pay_id}`\n\n"
-        f"👉 **ধাপ ১:** কত ডলার ডিপোজিট করেছেন তা লিখুন (যেমন: `1`, `5`, `10`):"
+        f"👉 **Step 1:** Enter the amount in USD you deposited (e.g., `1`, `5`, `10`):"
     )
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=cancel_keyboard())
     return STEP_TOPUP_AMOUNT
 
 async def save_topup_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = update.message.text.strip()
-    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+    if txt in ["❌ Cancel", "Cancel"]:
         context.user_data.pop('topup_data', None)
-        await update.message.reply_text("টপ-আপ প্রসেস বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
+        await update.message.reply_text("Top-up process cancelled.", reply_markup=get_user_keyboard())
         return ConversationHandler.END
         
     try:
@@ -764,7 +756,7 @@ async def save_topup_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if usd_val <= 0:
             raise ValueError
     except ValueError:
-        await update.message.reply_text("❌ অকার্যকর পরিমাণ! শুধুমাত্র সঠিক সংখ্যা লিখুন (যেমন: 1, 5, 10):")
+        await update.message.reply_text("❌ Invalid amount! Please enter a valid number (e.g., 1, 5, 10):")
         return STEP_TOPUP_AMOUNT
 
     dollar_rate = float(db_get_setting("dollar_rate", "1000"))
@@ -774,21 +766,21 @@ async def save_topup_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['topup_data']['amount'] = calc_coins
 
     await update.message.reply_text(
-        f"💰 **আপনার ডিপোজিট:** ${usd_val} = **{calc_coins} Coins**\n\n"
-        f"👉 **ধাপ ২:** আপনার পেমেন্টের **স্ক্রিনশট (Photo)** টি পাঠান:",
+        f"💰 **Your Deposit:** ${usd_val} = **{calc_coins} Coins**\n\n"
+        f"👉 **Step 2:** Send payment **screenshot (Photo)**:",
         reply_markup=cancel_keyboard()
     )
     return STEP_TOPUP_PHOTO
 
 async def save_topup_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    if msg.text and msg.text in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+    if msg.text and msg.text in ["❌ Cancel", "Cancel"]:
         context.user_data.pop('topup_data', None)
-        await update.message.reply_text("টপ-আপ প্রসেস বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
+        await update.message.reply_text("Top-up process cancelled.", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
     if not msg.photo:
-        await update.message.reply_text("❌ দয়া করে পেমেন্টের একটি স্ক্রিনশট (Photo) পাঠান:")
+        await update.message.reply_text("❌ Please send a screenshot (Photo) of payment:")
         return STEP_TOPUP_PHOTO
 
     photo_id = msg.photo[-1].file_id
@@ -802,10 +794,10 @@ async def save_topup_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('topup_data', None)
 
     await msg.reply_text(
-        f"🎉 **আপনার টপ-আপ আবেদন সফলভাবে জমা হয়েছে!**\n\n"
-        f"🆔 **আবেদন আইডি:** `#{req_id}`\n"
-        f"💵 **আমোউন্ট:** ${usd_amount} ({amount} Coins)\n\n"
-        f"⏳ অ্যাডমিন যাচাই করে খুব শীঘ্রই আপনার ব্যালেন্স যোগ করে দেবে।",
+        f"🎉 **Your top-up request has been submitted successfully!**\n\n"
+        f"🆔 **Request ID:** `#{req_id}`\n"
+        f"💵 **Amount:** ${usd_amount} ({amount} Coins)\n\n"
+        f"⏳ Admin will verify and add balance soon.",
         reply_markup=get_user_keyboard()
     )
     return ConversationHandler.END
@@ -823,12 +815,12 @@ async def topup_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
         req_id = int(data.split("_")[2])
         req = db_get_topup_by_id(req_id)
         if not req:
-            await query.message.reply_text("❌ আবেদনটি পাওয়া যায়নি।")
+            await query.message.reply_text("❌ Request not found.")
             return
 
         rid, uid, txid, photo_id, amount, status, created_at = req
         if status != 'PENDING':
-            await query.message.reply_text(f"⚠️ এই আবেদনটি ইতোমধ্যে {status} করা হয়েছে।")
+            await query.message.reply_text(f"⚠️ This request is already {status}.")
             return
 
         db_update_topup_status(req_id, 'APPROVED')
@@ -839,15 +831,15 @@ async def topup_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
         if query.message.caption:
             await query.edit_message_caption(
-                caption=f"{query.message.caption}\n\n✅ **স্ট্যাটাস: APPROVED** (কয়েন যোগ করা হয়েছে: {amount})"
+                caption=f"{query.message.caption}\n\n✅ **Status: APPROVED** (Added Coins: {amount})"
             )
 
         try:
             await context.bot.send_message(
                 chat_id=int(uid),
-                text=f"🎉 **আপনার টপ-আপ আবেদন অনুমোদিত হয়েছে!**\n\n"
-                     f"💰 যোগকৃত কয়েন: {amount}\n"
-                     f"💳 বর্তমান ব্যালেন্স: {u_data['credit']} Coins"
+                text=f"🎉 **Your top-up request has been approved!**\n\n"
+                     f"💰 Added Coins: {amount}\n"
+                     f"💳 Current Balance: {u_data['credit']} Coins"
             )
         except Exception as e:
             logger.error(f"Failed to notify user for approved topup: {e}")
@@ -856,26 +848,26 @@ async def topup_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
         req_id = int(data.split("_")[2])
         req = db_get_topup_by_id(req_id)
         if not req:
-            await query.message.reply_text("❌ আবেদনটি পাওয়া যায়নি।")
+            await query.message.reply_text("❌ Request not found.")
             return
 
         rid, uid, txid, photo_id, amount, status, created_at = req
         if status != 'PENDING':
-            await query.message.reply_text(f"⚠️ এই আবেদনটি ইতোমধ্যে {status} করা হয়েছে।")
+            await query.message.reply_text(f"⚠️ This request is already {status}.")
             return
 
         db_update_topup_status(req_id, 'REJECTED')
 
         if query.message.caption:
             await query.edit_message_caption(
-                caption=f"{query.message.caption}\n\n❌ **স্ট্যাটাস: REJECTED**"
+                caption=f"{query.message.caption}\n\n❌ **Status: REJECTED**"
             )
 
         try:
             await context.bot.send_message(
                 chat_id=int(uid),
-                text=f"❌ **আপনার টপ-আপ আবেদন বাতিল করা হয়েছে!**\n\n"
-                     f"প্রয়োজনে এডমিনের সাথে যোগাযোগ করুন।"
+                text=f"❌ **Your top-up request has been rejected!**\n\n"
+                     f"Contact admin if needed."
             )
         except Exception as e:
             logger.error(f"Failed to notify user for rejected topup: {e}")
@@ -896,7 +888,7 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
             curr = projects[idx].get('react_status', 'ON')
             projects[idx]['react_status'] = "OFF" if curr == "ON" else "ON"
             db_save_user(u_data)
-            await query.message.reply_text(f"✅ Reaction Status পরিবর্তিত হয়ে **{projects[idx]['react_status']}** হয়েছে!")
+            await query.message.reply_text(f"✅ Reaction Status changed to **{projects[idx]['react_status']}**!")
             return await show_my_projects(query.message, user_id)
 
     elif data.startswith("p_togview_"):
@@ -905,7 +897,7 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
             curr = projects[idx].get('view_status', 'ON')
             projects[idx]['view_status'] = "OFF" if curr == "ON" else "ON"
             db_save_user(u_data)
-            await query.message.reply_text(f"✅ Views Status পরিবর্তিত হয়ে **{projects[idx]['view_status']}** হয়েছে!")
+            await query.message.reply_text(f"✅ Views Status changed to **{projects[idx]['view_status']}**!")
             return await show_my_projects(query.message, user_id)
 
     elif data.startswith("p_edit_"):
@@ -919,8 +911,8 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
                 [InlineKeyboardButton("🔙 Back", callback_data="p_back")]
             ]
             await query.edit_message_text(
-                f"✏️ **এডিট:** {proj.get('channel_name')}\n\n"
-                f"কোন অপশনটি পরিবর্তন করতে চান সিলেক্ট করুন:",
+                f"✏️ **Edit:** {proj.get('channel_name')}\n\n"
+                f"Select an option to edit:",
                 reply_markup=InlineKeyboardMarkup(kb)
             )
             return STEP_EDIT_FIELD
@@ -931,12 +923,12 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
         context.user_data['edit_target'] = {'idx': idx, 'field': field}
         
         prompt_messages = {
-            "channel": "✍️ **নতুন চ্যানেলের লিংক পাঠান:**\n(যেমন: `https://t.me/your_channel`) \n\n⚠️ নিশ্চিত করুন বটটি নতুন চ্যানেলে অ্যাডমিন আছে!",
-            "count": "✍️ **নতুন রিয়্যাকশন সংখ্যা পাঠান:**\n(যেমন: `100`, `200`, `500`)",
-            "views": "✍️ **নতুন ভিউ সংখ্যা পাঠান:**\n(যেমন: `0`, `100`, `500`)"
+            "channel": "✍️ **Send new channel link:**\n(e.g., `https://t.me/your_channel`)\n\n⚠️ Make sure the bot is admin in the new channel!",
+            "count": "✍️ **Send new reaction quantity:**\n(e.g., `100`, `200`, `500`)",
+            "views": "✍️ **Send new views quantity:**\n(e.g., `0`, `100`, `500`)"
         }
         
-        msg_to_send = prompt_messages.get(field, "✍️ **নতুন মান লিখে পাঠান:**")
+        msg_to_send = prompt_messages.get(field, "✍️ **Send new value:**")
         await query.message.reply_text(msg_to_send, reply_markup=cancel_keyboard())
         return STEP_EDIT_VALUE
 
@@ -946,14 +938,14 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
 
 async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     val_txt = update.message.text.strip()
-    if val_txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+    if val_txt in ["❌ Cancel", "Cancel"]:
         context.user_data.pop('edit_target', None)
-        await update.message.reply_text("এডিট বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
+        await update.message.reply_text("Edit cancelled.", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
     target = context.user_data.get('edit_target')
     if not target:
-        await update.message.reply_text("❌ কিছু ভুল হয়েছে!", reply_markup=get_user_keyboard())
+        await update.message.reply_text("❌ Something went wrong!", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
     user_id = str(update.effective_user.id)
@@ -967,7 +959,7 @@ async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if field == 'channel':
             clean_uname = val_txt.replace("https://t.me/", "").replace("@", "").strip()
             if not clean_uname:
-                await update.message.reply_text("❌ অকার্যকর ইউজারনেম! আবার পাঠান:")
+                await update.message.reply_text("❌ Invalid username! Send again:")
                 return STEP_EDIT_VALUE
 
             try:
@@ -986,14 +978,14 @@ async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 projects[idx][field] = int(val_txt)
             except ValueError:
-                await update.message.reply_text("❌ দয়া করে শুধুমাত্র সংখ্যা লিখুন!")
+                await update.message.reply_text("❌ Please enter numbers only!")
                 return STEP_EDIT_VALUE
         else:
             projects[idx][field] = val_txt
 
         db_save_user(u_data)
         context.user_data.pop('edit_target', None)
-        await update.message.reply_text("🎉 **সফলভাবে আপডেট করা হয়েছে!**", reply_markup=get_user_keyboard())
+        await update.message.reply_text("🎉 **Updated successfully!**", reply_markup=get_user_keyboard())
     
     return ConversationHandler.END
 
@@ -1003,7 +995,7 @@ async def show_my_projects(message_obj, user_id):
     projects = u_data.get('projects', [])
 
     if not projects:
-        await message_obj.reply_text("❌ আপনার কোনো সক্রিয় প্রজেক্ট নেই।")
+        await message_obj.reply_text("❌ You have no active projects.")
         return
 
     for idx, p in enumerate(projects):
@@ -1018,14 +1010,14 @@ async def show_my_projects(message_obj, user_id):
             [InlineKeyboardButton("✏️ Edit Settings", callback_data=f"p_edit_{idx}")]
         ]
         p_text = (
-            f"🛠️ **প্রজেক্ট সেটিংস #{idx+1}: {p.get('channel_name', 'চ্যানেল')}**\n"
+            f"🛠️ **Project Settings #{idx+1}: {p.get('channel_name', 'Channel')}**\n"
             f"───────────────────\n"
-            f"🔗 লিংক: {p.get('target_url')}\n"
-            f"👍 রিয়্যাকশন সার্ভিস: **{r_st}**\n"
-            f"👁️ ভিউ সার্ভিস: **{v_st}**\n"
-            f"🚀 রিয়্যাকশন সংখ্যা: **{p.get('count', 100)}**\n"
-            f"👁️ ভিউ সংখ্যা: **{p.get('views', 0)}**\n"
-            f"😊 ইমোজি: **{p.get('emojis', 'POSITIVE')}**"
+            f"🔗 Link: {p.get('target_url')}\n"
+            f"👍 Reaction Service: **{r_st}**\n"
+            f"👁️ Views Service: **{v_st}**\n"
+            f"🚀 Reaction Count: **{p.get('count', 100)}**\n"
+            f"👁️ Views Count: **{p.get('views', 0)}**\n"
+            f"😊 Emojis: **{p.get('emojis', 'POSITIVE')}**"
         )
         await message_obj.reply_text(p_text, reply_markup=InlineKeyboardMarkup(kb))
 
@@ -1033,18 +1025,18 @@ async def show_my_projects(message_obj, user_id):
 async def show_order_list(message_obj, user_id):
     orders = db_get_user_orders(user_id)
     if not orders:
-        await message_obj.reply_text("📋 **অর্ডার তালিকা**\n───────────────────\n❌ কোনো সমাপ্ত অর্ডার পাওয়া যায়নি।")
+        await message_obj.reply_text("📋 **Order List**\n───────────────────\n❌ No completed orders found.")
         return
 
-    text = "📋 **সম্পন্ন অর্ডার তালিকা**\n───────────────────\n\n"
+    text = "📋 **Completed Order List**\n───────────────────\n\n"
     for o in orders:
         order_id, channel_name, count, post_link, created_at = o
         text += (
-            f"🆔 **অর্ডার আইডি:** `{order_id}`\n"
-            f"📢 **চ্যানেল:** {channel_name}\n"
-            f"✨ **রিয়্যাকশন/ভিউ:** {count}\n"
-            f"📅 **তারিখ:** {created_at}\n"
-            f"🔗 **পোস্ট:** [পোস্ট দেখুন]({post_link})\n"
+            f"🆔 **Order ID:** `{order_id}`\n"
+            f"📢 **Channel:** {channel_name}\n"
+            f"✨ **Reacts/Views:** {count}\n"
+            f"📅 **Date:** {created_at}\n"
+            f"🔗 **Post:** [View Post]({post_link})\n"
             f"───────────────\n"
         )
     await message_obj.reply_text(text, disable_web_page_preview=True)
@@ -1122,12 +1114,12 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                 try:
                     await context.bot.send_message(
                         chat_id=user_chat_id,
-                        text=f"⚠️ **রিয়্যাকশনের জন্য পর্যাপ্ত ব্যালেন্স নেই!**\n\n"
-                             f"📢 **চ্যানেল:** {ch_name}\n"
-                             f"📌 **পোস্ট লিংক:** {post_link}\n"
-                             f"প্রয়োজনীয় কয়েন: {needed_react_coins}\n"
-                             f"অবশিষ্ট কয়েন: {uinfo.get('credit', 0)}\n\n"
-                             f"দয়া করে আপনার অ্যাকাউন্ট ব্যালেন্স রিচার্জ করুন।"
+                        text=f"⚠️ **Insufficient balance for reaction!**\n\n"
+                             f"📢 **Channel:** {ch_name}\n"
+                             f"📌 **Post Link:** {post_link}\n"
+                             f"Required coins: {needed_react_coins}\n"
+                             f"Remaining coins: {uinfo.get('credit', 0)}\n\n"
+                             f"Please recharge your account balance."
                     )
                 except Exception as e:
                     logger.error(f"Error sending low balance msg: {e}")
@@ -1160,10 +1152,10 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                     try:
                         await context.bot.send_message(
                             chat_id=user_chat_id,
-                            text=f"❌ **রিয়্যাকশন অর্ডার প্রদান ব্যর্থ হয়েছে!**\n\n"
-                                 f"📢 **চ্যানেল:** {ch_name}\n"
-                                 f"⚠️ **কারণ:** `{err_msg}`\n\n"
-                                 f"📌 **পোস্ট লিংক:** {post_link}",
+                            text=f"❌ **Reaction order failed!**\n\n"
+                                 f"📢 **Channel:** {ch_name}\n"
+                                 f"⚠️ **Reason:** `{err_msg}`\n\n"
+                                 f"📌 **Post Link:** {post_link}",
                             reply_markup=post_btn
                         )
                     except Exception as e:
@@ -1175,12 +1167,12 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                 try:
                     await context.bot.send_message(
                         chat_id=user_chat_id,
-                        text=f"⚠️ **ভিউয়ের জন্য পর্যাপ্ত ব্যালেন্স নেই!**\n\n"
-                             f"📢 **চ্যানেল:** {ch_name}\n"
-                             f"📌 **পোস্ট লিংক:** {post_link}\n"
-                             f"প্রয়োজনীয় কয়েন: {needed_view_coins}\n"
-                             f"অবশিষ্ট কয়েন: {uinfo.get('credit', 0)}\n\n"
-                             f"দয়া করে আপনার অ্যাকাউন্ট ব্যালেন্স রিচার্জ করুন।"
+                        text=f"⚠️ **Insufficient balance for views!**\n\n"
+                             f"📢 **Channel:** {ch_name}\n"
+                             f"📌 **Post Link:** {post_link}\n"
+                             f"Required coins: {needed_view_coins}\n"
+                             f"Remaining coins: {uinfo.get('credit', 0)}\n\n"
+                             f"Please recharge your account balance."
                     )
                 except Exception as e:
                     logger.error(f"Error sending low balance msg for views: {e}")
@@ -1214,10 +1206,10 @@ def build_user_card_text_and_markup(uid):
 
     text = (
         f"👤 User: `{uid}`\n"
-        f"💰 {coins} | 💸 {spent}\n"
+        f"💰 Coins: {coins} | 💸 Spent: {spent}\n"
         f"✅ Orders: {total_orders}\n"
-        f"🔗 {channels_str}\n"
-        f"🚫 {status_str}"
+        f"🔗 Channels: {channels_str}\n"
+        f"🚫 Status: {status_str}"
     )
 
     kb = InlineKeyboardMarkup([
@@ -1235,13 +1227,13 @@ def build_user_card_text_and_markup(uid):
 
 async def start_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
-    await update.message.reply_text("🔍 **ইউজার ID লিখুন:**", reply_markup=cancel_keyboard())
+    await update.message.reply_text("🔍 **Enter User ID:**", reply_markup=cancel_keyboard())
     return STEP_ADMIN_SEARCH_USER
 
 async def process_admin_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = update.message.text.strip()
-    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
-        await update.message.reply_text("অনুসন্ধান বাতিল করা হয়েছে।", reply_markup=get_admin_keyboard())
+    if txt in ["❌ Cancel", "Cancel"]:
+        await update.message.reply_text("Search cancelled.", reply_markup=get_admin_keyboard())
         return ConversationHandler.END
 
     u_data = db_get_user(txt)
@@ -1249,7 +1241,7 @@ async def process_admin_search_user(update: Update, context: ContextTypes.DEFAUL
         card_text, card_kb = build_user_card_text_and_markup(txt)
         await update.message.reply_text(card_text, reply_markup=card_kb, parse_mode="Markdown")
     else:
-        await update.message.reply_text("❌ ডাটাবেজে এই ইউজার আইডিটি পাওয়া যায়নি!", reply_markup=get_admin_keyboard())
+        await update.message.reply_text("❌ User ID not found in database!", reply_markup=get_admin_keyboard())
     return ConversationHandler.END
 
 # Admin Inline Action Callback (Add, Deduct, Ban, Orders)
@@ -1267,7 +1259,7 @@ async def admin_user_action_callback(update: Update, context: ContextTypes.DEFAU
     if action == "add":
         context.user_data['admin_action_target'] = target_uid
         await query.message.reply_text(
-            f"➕ **ইউজার ID `{target_uid}` এর সাথে কত কয়েন যোগ করতে চান লিখুন:**",
+            f"➕ **Enter coin amount to add for User ID `{target_uid}`:**",
             reply_markup=cancel_keyboard()
         )
         return STEP_ADMIN_ADD_COINS
@@ -1275,7 +1267,7 @@ async def admin_user_action_callback(update: Update, context: ContextTypes.DEFAU
     elif action == "deduct":
         context.user_data['admin_action_target'] = target_uid
         await query.message.reply_text(
-            f"➖ **ইউজার ID `{target_uid}` এর অ্যাকাউন্ট থেকে কত কয়েন কাটতে চান লিখুন:**",
+            f"➖ **Enter coin amount to deduct from User ID `{target_uid}`:**",
             reply_markup=cancel_keyboard()
         )
         return STEP_ADMIN_DEDUCT_COINS
@@ -1296,10 +1288,10 @@ async def admin_user_action_callback(update: Update, context: ContextTypes.DEFAU
     elif action == "orders":
         orders = db_get_user_orders(target_uid, limit=50)
         if not orders:
-            await query.message.reply_text(f"📋 **ইউজার `{target_uid}` এর কোনো অর্ডার হিস্ট্রি পাওয়া যায়নি।**")
+            await query.message.reply_text(f"📋 **No order history found for User `{target_uid}`.**")
             return
 
-        orders_text = f"📋 **ইউজার `{target_uid}` এর শেষ ৫০টি অর্ডার:**\n───────────────────\n"
+        orders_text = f"📋 **Last 50 orders for User `{target_uid}`:**\n───────────────────\n"
         for o in orders:
             oid, ch_name, count, link, created_at = o
             orders_text += f"🆔 #{oid} | 📢 {ch_name} | 🚀 {count} | 📅 {created_at}\n"
@@ -1312,14 +1304,14 @@ async def admin_user_action_callback(update: Update, context: ContextTypes.DEFAU
 
 async def process_admin_add_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = update.message.text.strip()
-    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+    if txt in ["❌ Cancel", "Cancel"]:
         context.user_data.pop('admin_action_target', None)
-        await update.message.reply_text("বাতিল করা হয়েছে।", reply_markup=get_admin_keyboard())
+        await update.message.reply_text("Cancelled.", reply_markup=get_admin_keyboard())
         return ConversationHandler.END
 
     target_uid = context.user_data.get('admin_action_target')
     if not target_uid or not txt.isdigit():
-        await update.message.reply_text("❌ দয়া করে একটি সঠিক ধনাত্মক সংখ্যা লিখুন!")
+        await update.message.reply_text("❌ Please enter a valid positive number!")
         return STEP_ADMIN_ADD_COINS
 
     amount = int(txt)
@@ -1328,7 +1320,7 @@ async def process_admin_add_coins(update: Update, context: ContextTypes.DEFAULT_
     db_save_user(u_data)
 
     context.user_data.pop('admin_action_target', None)
-    await update.message.reply_text(f"✅ ইউজার `{target_uid}` কে সফলভাবে **{amount} Coins** প্রদান করা হয়েছে!", reply_markup=get_admin_keyboard())
+    await update.message.reply_text(f"✅ Successfully added **{amount} Coins** to User `{target_uid}`!", reply_markup=get_admin_keyboard())
 
     card_text, card_kb = build_user_card_text_and_markup(target_uid)
     await update.message.reply_text(card_text, reply_markup=card_kb, parse_mode="Markdown")
@@ -1336,14 +1328,14 @@ async def process_admin_add_coins(update: Update, context: ContextTypes.DEFAULT_
 
 async def process_admin_deduct_coins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = update.message.text.strip()
-    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+    if txt in ["❌ Cancel", "Cancel"]:
         context.user_data.pop('admin_action_target', None)
-        await update.message.reply_text("বাতিল করা হয়েছে।", reply_markup=get_admin_keyboard())
+        await update.message.reply_text("Cancelled.", reply_markup=get_admin_keyboard())
         return ConversationHandler.END
 
     target_uid = context.user_data.get('admin_action_target')
     if not target_uid or not txt.isdigit():
-        await update.message.reply_text("❌ দয়া করে একটি সঠিক ধনাত্মক সংখ্যা লিখুন!")
+        await update.message.reply_text("❌ Please enter a valid positive number!")
         return STEP_ADMIN_DEDUCT_COINS
 
     amount = int(txt)
@@ -1352,7 +1344,7 @@ async def process_admin_deduct_coins(update: Update, context: ContextTypes.DEFAU
     db_save_user(u_data)
 
     context.user_data.pop('admin_action_target', None)
-    await update.message.reply_text(f"✅ ইউজার `{target_uid}` এর অ্যাকাউন্ট থেকে **{amount} Coins** কেটে নেওয়া হয়েছে!", reply_markup=get_admin_keyboard())
+    await update.message.reply_text(f"✅ Successfully deducted **{amount} Coins** from User `{target_uid}`!", reply_markup=get_admin_keyboard())
 
     card_text, card_kb = build_user_card_text_and_markup(target_uid)
     await update.message.reply_text(card_text, reply_markup=card_kb, parse_mode="Markdown")
@@ -1360,24 +1352,24 @@ async def process_admin_deduct_coins(update: Update, context: ContextTypes.DEFAU
 
 async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS: return ConversationHandler.END
-    await update.message.reply_text("📢 **সব ইউজারের কাছে পাঠানোর জন্য বার্তাটি (SMS) পাঠান:**", reply_markup=cancel_keyboard())
+    await update.message.reply_text("📢 **Send the message (SMS) to broadcast to all users:**", reply_markup=cancel_keyboard())
     return STEP_ADMIN_BROADCAST
 
 async def process_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg_text = update.message.text
-    if msg_text in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
-        await update.message.reply_text("ব্রডকাস্ট বাতিল করা হয়েছে।", reply_markup=get_admin_keyboard())
+    if msg_text in ["❌ Cancel", "Cancel"]:
+        await update.message.reply_text("Broadcast cancelled.", reply_markup=get_admin_keyboard())
         return ConversationHandler.END
 
     count = 0
     all_users = db_get_all_users()
     for uid in all_users:
         try:
-            await context.bot.send_message(chat_id=int(uid), text=f"📢 **নোটিশ:**\n\n{msg_text}")
+            await context.bot.send_message(chat_id=int(uid), text=f"📢 **Notice:**\n\n{msg_text}")
             count += 1
             await asyncio.sleep(0.05)
         except Exception: pass
-    await update.message.reply_text(f"🎉 বার্তাটি সফলভাবে {count} জন ইউজারের কাছে পাঠানো হয়েছে!", reply_markup=get_admin_keyboard())
+    await update.message.reply_text(f"🎉 Message successfully sent to {count} users!", reply_markup=get_admin_keyboard())
     return ConversationHandler.END
 
 # ⚙️ Dynamic Settings Edit Handlers
@@ -1391,32 +1383,32 @@ async def admin_settings_edit_callback(update: Update, context: ContextTypes.DEF
         context.user_data['admin_edit_key'] = key
         
         prompts = {
-            "smm_api_key": "🔑 **নতুন SMM Panel API Key পাঠান:**",
-            "smm_service_id": "🧪 **নতুন SMM Reaction Service ID পাঠান:**",
-            "smm_view_service_id": "👁️ **নতুন SMM View Service ID পাঠান:**",
-            "coin_rate": "💡 **নতুন Reaction Coin Rate লিখুন:**\n(যেমন: `4.8` মানে ১টি রিয়েকশন = ৪.৮ কয়েন)",
-            "view_coin_rate": "👁️ **নতুন View Coin Rate লিখুন:**\n(যেমন: `4.8` মানে ১টি ভিউ = ৪.৮ কয়েন)",
-            "dollar_rate": "💵 **নতুন Dollar Rate ($1 = ? Coins) লিখুন:**\n(যেমন: `1000` মানে $1 = 1000 Coins)",
-            "referral_bonus": "👥 **রেফারেল বোনাসের নতুন Coins সংখ্যা লিখুন:**\n(যেমন: `100`, `200`)"
+            "smm_api_key": "🔑 **Send new SMM Panel API Key:**",
+            "smm_service_id": "🧪 **Send new SMM Reaction Service ID:**",
+            "smm_view_service_id": "👁️ **Send new SMM View Service ID:**",
+            "coin_rate": "💡 **Send new Reaction Coin Rate:**\n(e.g., `4.8` means 1 reaction = 4.8 coins)",
+            "view_coin_rate": "👁️ **Send new View Coin Rate:**\n(e.g., `4.8` means 1 view = 4.8 coins)",
+            "dollar_rate": "💵 **Send new Dollar Rate ($1 = ? Coins):**\n(e.g., `1000` means $1 = 1000 Coins)",
+            "referral_bonus": "👥 **Send new Referral Bonus coins:**\n(e.g., `100`, `200`)"
         }
-        await query.message.reply_text(prompts.get(key, "✍️ নতুন মান লিখে পাঠান:"), reply_markup=cancel_keyboard())
+        await query.message.reply_text(prompts.get(key, "✍️ Send new value:"), reply_markup=cancel_keyboard())
         return STEP_ADMIN_EDIT_SETTING
 
 async def process_admin_edit_setting(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = update.message.text.strip()
-    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+    if txt in ["❌ Cancel", "Cancel"]:
         context.user_data.pop('admin_edit_key', None)
-        await update.message.reply_text("এডিট বাতিল করা হয়েছে।", reply_markup=get_admin_keyboard())
+        await update.message.reply_text("Edit cancelled.", reply_markup=get_admin_keyboard())
         return ConversationHandler.END
 
     key = context.user_data.get('admin_edit_key')
     if not key:
-        await update.message.reply_text("❌ কিছু ভুল হয়েছে!", reply_markup=get_admin_keyboard())
+        await update.message.reply_text("❌ Something went wrong!", reply_markup=get_admin_keyboard())
         return ConversationHandler.END
 
     db_set_setting(key, txt)
     context.user_data.pop('admin_edit_key', None)
-    await update.message.reply_text(f"🎉 **{key.upper()} সফলভাবে আপডেট করা হয়েছে:** `{txt}`", reply_markup=get_admin_keyboard())
+    await update.message.reply_text(f"🎉 **{key.upper()} updated successfully:** `{txt}`", reply_markup=get_admin_keyboard())
     return ConversationHandler.END
 
 # 🎛️ Admin Dashboard Inline Callbacks Handler
@@ -1431,7 +1423,7 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
     if data == "dash_bot_orders":
         bot_orders = db_get_all_bot_orders(50)
         if not bot_orders:
-            return await query.message.reply_text("🤖 **Bot Orders**\n\n❌ কোন অর্ডার পাওয়া যায়নি।")
+            return await query.message.reply_text("🤖 **Bot Orders**\n\n❌ No orders found.")
         
         res_text = "Bot Orders\n\n"
         for order in bot_orders:
@@ -1464,18 +1456,18 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
     elif data == "dash_all_orders":
         pending_topups = db_get_pending_topups()
         if not pending_topups:
-            return await query.message.reply_text("📋 **সকল পেমেন্ট আবেদন**\n───────────────────\n❌ বর্তমানে কোনো পেন্ডিং টপ-আপ আবেদন নেই।")
+            return await query.message.reply_text("📋 **All Payment Requests**\n───────────────────\n❌ No pending top-up requests currently.")
         
-        await query.message.reply_text(f"📋 **মোট {len(pending_topups)} টি পেন্ডিং টপ-আপ আবেদন রয়েছে:**")
+        await query.message.reply_text(f"📋 **Total {len(pending_topups)} pending top-up requests:**")
         
         for req in pending_topups:
             rid, uid, txid, photo_id, amount, created_at = req
             caption_text = (
-                f"💳 **পেন্ডিং টপ-আপ আবেদন #{rid}**\n"
+                f"💳 **Pending Top-Up Request #{rid}**\n"
                 f"───────────────────\n"
-                f"👤 **ইউজার আইডি:** `{uid}`\n"
-                f"💰 **আবেদনের কয়েন:** {amount}\n"
-                f"📅 **তারিখ:** {created_at}"
+                f"👤 **User ID:** `{uid}`\n"
+                f"💰 **Requested Coins:** {amount}\n"
+                f"📅 **Date:** {created_at}"
             )
             kb = InlineKeyboardMarkup([
                 [
@@ -1486,7 +1478,7 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
             try:
                 await query.message.reply_photo(photo=photo_id, caption=caption_text, reply_markup=kb)
             except Exception as e:
-                await query.message.reply_text(f"{caption_text}\n\n⚠️ ছবি দেখতে সমস্যা হচ্ছে।", reply_markup=kb)
+                await query.message.reply_text(f"{caption_text}\n\n⚠️ Failed to load image.", reply_markup=kb)
         return
 
     elif data == "dash_services":
@@ -1514,11 +1506,11 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
             [InlineKeyboardButton("✏️ Edit Dollar Rate ($1 = ? Coins)", callback_data="edit_setting_dollar_rate")]
         ])
         return await query.message.reply_text(
-            f"💡 **কয়েন রেট সেটিংস:**\n───────────────────\n"
-            f"📌 প্রতি রিয়্যাকশনে কয়েন: **{curr_rate} Coins**\n"
-            f"👁️ প্রতি ভিউয়ে কয়েন: **{curr_view_rate} Coins**\n"
-            f"💵 ডলারে কয়েন রেট: **$1 = {curr_dollar} Coins**\n\n"
-            f"যেকোনো রেট পরিবর্তন করতে নিচের অপশন বেছে নিন:", 
+            f"💡 **Coin Rate Settings:**\n───────────────────\n"
+            f"📌 Coins per reaction: **{curr_rate} Coins**\n"
+            f"👁️ Coins per view: **{curr_view_rate} Coins**\n"
+            f"💵 Dollar coin rate: **$1 = {curr_dollar} Coins**\n\n"
+            f"Select an option below to change rate:", 
             reply_markup=kb
         )
 
@@ -1526,9 +1518,9 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
         curr_ref = db_get_setting("referral_bonus", "100")
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("✏️ Edit Ref Bonus", callback_data="edit_setting_referral_bonus")]])
         return await query.message.reply_text(
-            f"👥 **রেফারেল সেটিংস:**\n───────────────────\n"
-            f"বর্তমান বোনাস: **প্রতি রেফারে {curr_ref} কয়েন**\n\n"
-            f"রেফারেল বোনাস কয়েন পরিবর্তন করতে নিচের বাটনে ক্লিক করুন।", 
+            f"👥 **Referral Settings:**\n───────────────────\n"
+            f"Current bonus: **{curr_ref} coins per referral**\n\n"
+            f"Click button below to change referral bonus coins.", 
             reply_markup=kb
         )
 
@@ -1541,7 +1533,7 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
             "dash_failed_partial": "⚠️ Failed/Partial"
         }
         name = option_names.get(data, "Option")
-        return await query.message.reply_text(f"⚙️ **{name}** অপশনটি সিলেক্ট করা হয়েছে।")
+        return await query.message.reply_text(f"⚙️ **{name}** selected.")
 
 # Menu Handlers
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1552,7 +1544,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     u_data = db_get_user(str_id, username_val=username)
 
-    if text and text.lower() in ["admin", "অ্যাডমিন"]:
+    if text and text.lower() in ["admin"]:
         return await admin_panel_command(update, context)
 
     # Check for direct Admin Credit addition format: "USER_ID AMOUNT"
@@ -1564,7 +1556,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if target_u:
                 target_u['credit'] += amount
                 db_save_user(target_u)
-                await update.message.reply_text(f"✅ ইউজার `{target_id}` এর নতুন ব্যালেন্স: {target_u['credit']} Coins", reply_markup=get_admin_keyboard())
+                await update.message.reply_text(f"✅ New balance for User `{target_id}`: {target_u['credit']} Coins", reply_markup=get_admin_keyboard())
                 return
 
     # 👑 Admin Actions
@@ -1579,13 +1571,13 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("💡 Coin Rate Settings", callback_data="dash_coin_rate"), InlineKeyboardButton("👥 Referral Settings", callback_data="dash_referral_settings")]
             ])
             return await update.message.reply_text(
-                "📊 **অ্যাডমিন ড্যাশবোর্ড সেটিংস:**\n───────────────────\nনিচের যেকোনো অপশন বেছে নিন:", 
+                "📊 **Admin Dashboard Settings:**\n───────────────────\nSelect an option below:", 
                 reply_markup=admin_dash_inline_kb
             )
 
         elif text == "👥 Users Report":
             all_u = db_get_all_users()
-            u_list = "👥 **ইউজার রিপোর্ট:**\n───────────────────\n\n"
+            u_list = "👥 **Users Report:**\n───────────────────\n\n"
             for uid, uinfo in list(all_u.items())[:30]:
                 uname = f"@{uinfo['username']}" if uinfo.get('username') else "N/A"
                 projects = uinfo.get('projects', [])
@@ -1612,17 +1604,19 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         elif text == "🏠 Main Menu":
-            return await update.message.reply_text("🏠 মেইন মেনু:", reply_markup=get_user_keyboard())
+            return await update.message.reply_text("🏠 Main Menu:", reply_markup=get_user_keyboard())
 
     # 👤 Regular User Actions
     if text == "👤 Profile":
+        spent_coins = db_get_user_spent_coins(str_id)
         profile_text = (
-            f"👤 **ইউজার প্রোফাইল**\n───────────────────\n"
-            f"🆔 ইউজার আইডি: `{str_id}`\n"
-            f"💰 কয়েন ব্যালেন্স: {u_data['credit']}\n"
-            f"📁 সক্রিয় প্রজেক্ট: {len(u_data['projects'])}\n"
-            f"👥 মোট রেফারেল: {u_data['ref_count']}\n"
-            f"🎁 রেফারেল ইনকাম: {u_data['ref_credit']} coins"
+            f"👤 **User Profile**\n───────────────────\n"
+            f"🆔 User ID: `{str_id}`\n"
+            f"💰 Coin Balance: {u_data['credit']}\n"
+            f"💸 Total Spent: {spent_coins} coins\n"
+            f"📁 Active Projects: {len(u_data['projects'])}\n"
+            f"👥 Total Referrals: {u_data['ref_count']}\n"
+            f"🎁 Referral Earnings: {u_data['ref_credit']} coins"
         )
         await update.message.reply_text(profile_text)
 
@@ -1635,7 +1629,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text in ["🎧 Support", "Support"]:
         inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 Contact Support", url="https://t.me/ARIYAN_VAI_BOSS")]])
         await update.message.reply_text(
-            "🎧 **সাহায্য প্রয়োজন?**\n\nআমাদের সাপোর্ট টিমকে সরাসরি বার্তা পাঠাতে নিচের বাটনে ক্লিক করুন:",
+            "🎧 **Need help?**\n\nClick the button below to message our support team directly:",
             reply_markup=inline_kb
         )
 
@@ -1643,9 +1637,9 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ref_link = f"https://t.me/{BOT_USERNAME}?start={str_id}"
         ref_bonus = db_get_setting("referral_bonus", "100")
         await update.message.reply_text(
-            f"👥 **রেফার এবং ইনকাম প্রোগ্রাম**\n───────────────────\n"
-            f"🔗 **আপনার রেফারেল লিংক:**\n{ref_link}\n\n"
-            f"🎁 প্রতি সফল রেফারে {ref_bonus} ফ্রী কয়েন অর্জন করুন!"
+            f"👥 **Refer & Earn Program**\n───────────────────\n"
+            f"🔗 **Your Referral Link:**\n{ref_link}\n\n"
+            f"🎁 Earn {ref_bonus} free coins for each successful referral!"
         )
 
 if __name__ == '__main__':
@@ -1690,7 +1684,7 @@ if __name__ == '__main__':
         },
         fallbacks=[
             CommandHandler('start', start), 
-            MessageHandler(filters.Regex("^(❌ Cancel|Cancel|❌ বাতিল করুন|বাতিল করুন)$"), cancel_flow),
+            MessageHandler(filters.Regex("^(❌ Cancel|Cancel)$"), cancel_flow),
             CallbackQueryHandler(cancel_flow, pattern="^cancel_flow$")
         ]
     )
