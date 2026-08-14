@@ -473,7 +473,7 @@ async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
     await update.message.reply_text(text, reply_markup=get_admin_keyboard())
 
-# --- ⚙️ NEW SETUP LOGIC (AS REQUESTED IN IMAGE) ---
+# --- ⚙️ UPDATED SETUP LOGIC (EDIT MESSAGE INSTEAD OF SENDING NEW ONES) ---
 
 def build_setup_dashboard_markup_and_text(context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
@@ -513,6 +513,23 @@ def build_setup_dashboard_markup_and_text(context: ContextTypes.DEFAULT_TYPE):
 
     return text, kb
 
+async def update_setup_message(context: ContextTypes.DEFAULT_TYPE):
+    """Helper function to edit the existing Setup Dashboard message"""
+    setup_msg_id = context.user_data.get('setup_msg_id')
+    chat_id = context.user_data.get('setup_chat_id')
+    
+    if setup_msg_id and chat_id:
+        text, kb = build_setup_dashboard_markup_and_text(context)
+        try:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=setup_msg_id,
+                text=text,
+                reply_markup=kb
+            )
+        except Exception as e:
+            logger.error(f"Error editing setup message: {e}")
+
 async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = db_get_user(user_id)
@@ -535,7 +552,11 @@ async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
 
     text, kb = build_setup_dashboard_markup_and_text(context)
-    await update.message.reply_text(text, reply_markup=kb)
+    msg = await update.message.reply_text(text, reply_markup=kb)
+    
+    # Store Setup Message ID & Chat ID to edit later
+    context.user_data['setup_msg_id'] = msg.message_id
+    context.user_data['setup_chat_id'] = msg.chat_id
     return STEP_SETUP_DASHBOARD
 
 async def setup_dashboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -544,25 +565,25 @@ async def setup_dashboard_callback(update: Update, context: ContextTypes.DEFAULT
     data = query.data
 
     if data == "setup_btn_channel":
-        await query.message.reply_text("🔗 চ্যানেলের ইউজারনেম দিন। যেমন: @YourChannel")
+        await query.edit_message_text("🔗 চ্যানেলের ইউজারনেম দিন। যেমন: @YourChannel")
         return STEP_INPUT_CHANNEL
 
     elif data == "setup_btn_views":
         view_rate = float(db_get_setting("view_coin_rate", "4.8"))
         coins_1000 = int(1000 * view_rate)
-        await query.message.reply_text(f"👀 কত Views?\n(1000 Views = {coins_1000} Coins)\nসংখ্যা লিখুন:")
+        await query.edit_message_text(f"👀 কত Views?\n(1000 Views = {coins_1000} Coins)\nসংখ্যা লিখুন:")
         return STEP_INPUT_VIEWS
 
     elif data == "setup_btn_reacts":
         react_rate = float(db_get_setting("coin_rate", "4.8"))
         coins_1000 = int(1000 * react_rate)
-        await query.message.reply_text(f"❤️ কত Reacts?\n(1000 Reacts = {coins_1000} Coins)\nসংখ্যা লিখুন:")
+        await query.edit_message_text(f"❤️ কত Reacts?\n(1000 Reacts = {coins_1000} Coins)\nসংখ্যা লিখুন:")
         return STEP_INPUT_REACTS
 
     elif data == "setup_btn_save":
         draft = context.user_data.get('draft_project', {})
         if not draft.get('username') or draft.get('views') is None or draft.get('count') is None:
-            await query.message.reply_text("❌ সেটআপ সম্পূর্ণ হয়নি! দয়া করে Channel Link, Views এবং Reacts অপশনগুলো সেট করুন।")
+            await query.answer("❌ সেটআপ সম্পূর্ণ হয়নি! দয়া করে Channel Link, Views এবং Reacts অপশনগুলো সেট করুন।", show_alert=True)
             return STEP_SETUP_DASHBOARD
 
         user_id = query.from_user.id
@@ -596,12 +617,21 @@ async def setup_dashboard_callback(update: Update, context: ContextTypes.DEFAULT
             f"👀 Views: {draft['views']} ({v_cost} Coins/post)\n"
             f"❤️ Reacts: {draft['count']} ({r_cost} Coins/post)"
         )
-        await query.message.reply_text(saved_msg)
+        await query.edit_message_text(saved_msg)
         context.user_data.pop('draft_project', None)
+        context.user_data.pop('setup_msg_id', None)
+        context.user_data.pop('setup_chat_id', None)
         return ConversationHandler.END
 
 async def handle_input_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (update.message.text or "").strip()
+    
+    # Delete user input message to keep chat clean
+    try:
+        await update.message.delete()
+    except Exception:
+        pass
+
     if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
         context.user_data.pop('draft_project', None)
         await update.message.reply_text("প্রসেস বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
@@ -609,69 +639,90 @@ async def handle_input_channel(update: Update, context: ContextTypes.DEFAULT_TYP
 
     clean_uname = txt.replace("https://t.me/", "").replace("@", "").strip()
     if not clean_uname:
-        await update.message.reply_text("❌ অকার্যকর ইউজারনেম! সঠিক ইউজারনেম দিন। যেমন: @YourChannel")
+        # Update setup message to prompt error
+        setup_msg_id = context.user_data.get('setup_msg_id')
+        chat_id = context.user_data.get('setup_chat_id')
+        if setup_msg_id and chat_id:
+            await context.bot.edit_message_text(
+                chat_id=chat_id, message_id=setup_msg_id,
+                text="❌ অকার্যকর ইউজারনেম! সঠিক ইউজারনেম দিন। যেমন: @YourChannel"
+            )
         return STEP_INPUT_CHANNEL
 
     draft = context.user_data.get('draft_project', {})
     draft['username'] = clean_uname
     draft['target_url'] = f"https://t.me/{clean_uname}"
 
-    # Auto ask Views if Views is not set yet
-    if draft.get('views') is None:
-        view_rate = float(db_get_setting("view_coin_rate", "4.8"))
-        coins_1000 = int(1000 * view_rate)
-        await update.message.reply_text(f"👀 কত Views?\n(1000 Views = {coins_1000} Coins)\nসংখ্যা লিখুন:")
-        return STEP_INPUT_VIEWS
-
-    text, kb = build_setup_dashboard_markup_and_text(context)
-    await update.message.reply_text(text, reply_markup=kb)
+    # Update Setup message back to main dashboard
+    await update_setup_message(context)
     return STEP_SETUP_DASHBOARD
 
 async def handle_input_views(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (update.message.text or "").strip()
+    
+    # Delete user input message
+    try:
+        await update.message.delete()
+    except Exception:
+        pass
+
     if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
         context.user_data.pop('draft_project', None)
         await update.message.reply_text("প্রসেস বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
     if not txt.isdigit():
-        await update.message.reply_text("❌ দয়া করে একটি সঠিক সংখ্যা লিখুন!")
+        setup_msg_id = context.user_data.get('setup_msg_id')
+        chat_id = context.user_data.get('setup_chat_id')
+        if setup_msg_id and chat_id:
+            await context.bot.edit_message_text(
+                chat_id=chat_id, message_id=setup_msg_id,
+                text="❌ দয়া করে একটি সঠিক সংখ্যা লিখুন!"
+            )
         return STEP_INPUT_VIEWS
 
     draft = context.user_data.get('draft_project', {})
     draft['views'] = int(txt)
 
-    # Auto ask Reacts if Reacts is not set yet
-    if draft.get('count') is None:
-        react_rate = float(db_get_setting("coin_rate", "4.8"))
-        coins_1000 = int(1000 * react_rate)
-        await update.message.reply_text(f"❤️ কত Reacts?\n(1000 Reacts = {coins_1000} Coins)\nসংখ্যা লিখুন:")
-        return STEP_INPUT_REACTS
-
-    text, kb = build_setup_dashboard_markup_and_text(context)
-    await update.message.reply_text(text, reply_markup=kb)
+    # Update Setup message back to main dashboard
+    await update_setup_message(context)
     return STEP_SETUP_DASHBOARD
 
 async def handle_input_reacts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (update.message.text or "").strip()
+    
+    # Delete user input message
+    try:
+        await update.message.delete()
+    except Exception:
+        pass
+
     if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
         context.user_data.pop('draft_project', None)
         await update.message.reply_text("প্রসেস বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
     if not txt.isdigit():
-        await update.message.reply_text("❌ দয়া করে একটি সঠিক সংখ্যা লিখুন!")
+        setup_msg_id = context.user_data.get('setup_msg_id')
+        chat_id = context.user_data.get('setup_chat_id')
+        if setup_msg_id and chat_id:
+            await context.bot.edit_message_text(
+                chat_id=chat_id, message_id=setup_msg_id,
+                text="❌ দয়া করে একটি সঠিক সংখ্যা লিখুন!"
+            )
         return STEP_INPUT_REACTS
 
     draft = context.user_data.get('draft_project', {})
     draft['count'] = int(txt)
 
-    text, kb = build_setup_dashboard_markup_and_text(context)
-    await update.message.reply_text(text, reply_markup=kb)
+    # Update Setup message back to main dashboard
+    await update_setup_message(context)
     return STEP_SETUP_DASHBOARD
 
 async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('draft_project', None)
+    context.user_data.pop('setup_msg_id', None)
+    context.user_data.pop('setup_chat_id', None)
     context.user_data.pop('edit_target', None)
     context.user_data.pop('admin_edit_key', None)
     context.user_data.pop('topup_data', None)
