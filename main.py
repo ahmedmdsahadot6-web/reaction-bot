@@ -923,6 +923,7 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
                 f"কোন অপশনটি পরিবর্তন করতে চান সিলেক্ট করুন:",
                 reply_markup=InlineKeyboardMarkup(kb)
             )
+            return STEP_EDIT_FIELD
 
     elif data.startswith("fe_"):
         parts = data.split("_")
@@ -941,6 +942,7 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
 
     elif data == "p_back":
         await show_my_projects(query.message, user_id)
+        return ConversationHandler.END
 
 async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     val_txt = update.message.text.strip()
@@ -1664,7 +1666,7 @@ if __name__ == '__main__':
             MessageHandler(filters.Regex("^💰 Top-up$"), start_topup),
             MessageHandler(filters.Regex("^👤 Search User$"), start_search_user),
             MessageHandler(filters.Regex("^📢 Send SMS$"), start_broadcast),
-            CallbackQueryHandler(project_action_callback, pattern="^(fe_|p_)"),
+            CallbackQueryHandler(project_action_callback, pattern="^p_edit_"),
             CallbackQueryHandler(admin_settings_edit_callback, pattern="^edit_setting_"),
             CallbackQueryHandler(admin_user_action_callback, pattern="^uact_")
         ],
@@ -1673,6 +1675,7 @@ if __name__ == '__main__':
             STEP_INPUT_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_channel)],
             STEP_INPUT_VIEWS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_views)],
             STEP_INPUT_REACTS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_reacts)],
+            STEP_EDIT_FIELD: [CallbackQueryHandler(project_action_callback, pattern="^fe_")],
             STEP_EDIT_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_value)],
             STEP_ADMIN_SEARCH_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_search_user)],
             STEP_ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_broadcast)],
@@ -1689,8 +1692,7 @@ if __name__ == '__main__':
             CommandHandler('start', start), 
             MessageHandler(filters.Regex("^(❌ Cancel|Cancel|❌ বাতিল করুন|বাতিল করুন)$"), cancel_flow),
             CallbackQueryHandler(cancel_flow, pattern="^cancel_flow$")
-        ],
-        per_message=False
+        ]
     )
 
     channel_handler = MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post)
