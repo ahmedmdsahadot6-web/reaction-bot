@@ -473,7 +473,7 @@ async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
     await update.message.reply_text(text, reply_markup=get_admin_keyboard())
 
-# --- ⚙️ UPDATED SETUP LOGIC (EDIT MESSAGE INSTEAD OF SENDING NEW ONES) ---
+# --- ⚙️ SETUP LOGIC ---
 
 def build_setup_dashboard_markup_and_text(context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
@@ -571,13 +571,13 @@ async def setup_dashboard_callback(update: Update, context: ContextTypes.DEFAULT
     elif data == "setup_btn_views":
         view_rate = float(db_get_setting("view_coin_rate", "4.8"))
         coins_1000 = int(1000 * view_rate)
-        await query.edit_message_text(f"👀 কত Views?\n(1000 Views = {coins_1000} Coins)\nসংখ্যা লিখুন:")
+        await query.edit_message_text(f"👀 কত Views?({coins_1000} Coins)সংখ্যা লিখুন:")
         return STEP_INPUT_VIEWS
 
     elif data == "setup_btn_reacts":
         react_rate = float(db_get_setting("coin_rate", "4.8"))
         coins_1000 = int(1000 * react_rate)
-        await query.edit_message_text(f"❤️ কত Reacts?\n(1000 Reacts = {coins_1000} Coins)\nসংখ্যা লিখুন:")
+        await query.edit_message_text(f"❤️ কত Reacts?({coins_1000} Coins)সংখ্যা লিখুন:")
         return STEP_INPUT_REACTS
 
     elif data == "setup_btn_save":
@@ -626,7 +626,6 @@ async def setup_dashboard_callback(update: Update, context: ContextTypes.DEFAULT
 async def handle_input_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (update.message.text or "").strip()
     
-    # Delete user input message to keep chat clean
     try:
         await update.message.delete()
     except Exception:
@@ -639,7 +638,6 @@ async def handle_input_channel(update: Update, context: ContextTypes.DEFAULT_TYP
 
     clean_uname = txt.replace("https://t.me/", "").replace("@", "").strip()
     if not clean_uname:
-        # Update setup message to prompt error
         setup_msg_id = context.user_data.get('setup_msg_id')
         chat_id = context.user_data.get('setup_chat_id')
         if setup_msg_id and chat_id:
@@ -653,14 +651,12 @@ async def handle_input_channel(update: Update, context: ContextTypes.DEFAULT_TYP
     draft['username'] = clean_uname
     draft['target_url'] = f"https://t.me/{clean_uname}"
 
-    # Update Setup message back to main dashboard
     await update_setup_message(context)
     return STEP_SETUP_DASHBOARD
 
 async def handle_input_views(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (update.message.text or "").strip()
     
-    # Delete user input message
     try:
         await update.message.delete()
     except Exception:
@@ -684,14 +680,12 @@ async def handle_input_views(update: Update, context: ContextTypes.DEFAULT_TYPE)
     draft = context.user_data.get('draft_project', {})
     draft['views'] = int(txt)
 
-    # Update Setup message back to main dashboard
     await update_setup_message(context)
     return STEP_SETUP_DASHBOARD
 
 async def handle_input_reacts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (update.message.text or "").strip()
     
-    # Delete user input message
     try:
         await update.message.delete()
     except Exception:
@@ -715,7 +709,6 @@ async def handle_input_reacts(update: Update, context: ContextTypes.DEFAULT_TYPE
     draft = context.user_data.get('draft_project', {})
     draft['count'] = int(txt)
 
-    # Update Setup message back to main dashboard
     await update_setup_message(context)
     return STEP_SETUP_DASHBOARD
 
