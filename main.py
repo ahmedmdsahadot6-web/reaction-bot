@@ -1624,7 +1624,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"👤 **ইউজার প্রোফাইল**\n───────────────────\n"
             f"🆔 ইউজার আইডি: `{str_id}`\n"
             f"💰 কয়েন ব্যালেন্স: {u_data['credit']}\n"
-            f"💵 মোট খরচ: ({spent_coins} Coins)\n"
+            f"💵 মোট খরচ: {spent_coins}\n"
             f"📁 সক্রিয় প্রজেক্ট: {len(u_data['projects'])}\n"
             f"👥 মোট রেফারেল: {u_data['ref_count']}\n"
             f"🎁 রেফারেল ইনকাম: {u_data['ref_credit']} coins"
