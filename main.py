@@ -141,8 +141,8 @@ def init_db():
         "smm_api_key": "792d092f1f7fdcebcb9233107b2f1f33",
         "smm_service_id": "1936",
         "smm_view_service_id": "7294", # View Service ID
-        "coin_rate": "1",          # 1 coin = 1 reaction
-        "view_coin_rate": "1",     # 1 coin = 1 view (Added)
+        "coin_rate": "4.8",        # Coin rate for reacts (1 react = 4.8 coins, 1000 = 4800)
+        "view_coin_rate": "4.8",   # Coin rate for views (1 view = 4.8 coins, 1000 = 4800)
         "dollar_rate": "1000",     # $1 = 1000 coins
         "referral_bonus": "100"    # 100 coins per referral
     }
@@ -259,8 +259,8 @@ def db_get_user_spent_coins(user_id):
     rows = cursor.fetchall()
     conn.close()
     
-    react_rate = float(db_get_setting("coin_rate", "1"))
-    view_rate = float(db_get_setting("view_coin_rate", "1"))
+    react_rate = float(db_get_setting("coin_rate", "4.8"))
+    view_rate = float(db_get_setting("view_coin_rate", "4.8"))
     
     total_spent = 0
     for otype, count in rows:
@@ -356,8 +356,8 @@ def db_update_topup_status(req_id, status):
     conn.close()
 
 # States
-(STEP_CHANNEL, STEP_COUNT, STEP_VIEWS, 
- STEP_REVIEW, STEP_EDIT_FIELD, STEP_EDIT_VALUE,
+(STEP_SETUP_DASHBOARD, STEP_INPUT_CHANNEL, STEP_INPUT_VIEWS, STEP_INPUT_REACTS,
+ STEP_EDIT_FIELD, STEP_EDIT_VALUE,
  STEP_ADMIN_SEARCH_USER, STEP_ADMIN_BROADCAST, STEP_ADMIN_EDIT_SETTING,
  STEP_TOPUP_AMOUNT, STEP_TOPUP_PHOTO,
  STEP_ADMIN_ADD_COINS, STEP_ADMIN_DEDUCT_COINS) = range(13)
@@ -473,8 +473,47 @@ async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
     await update.message.reply_text(text, reply_markup=get_admin_keyboard())
 
-# --- ⚙️ Setup Logic ---
-async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# --- ⚙️ NEW SETUP LOGIC (AS REQUESTED IN IMAGE) ---
+
+def build_setup_dashboard_markup_and_text(context: ContextTypes.DEFAULT_TYPE):
+    draft = context.user_data.get('draft_project', {})
+    channel = draft.get('username')
+    views = draft.get('views')
+    reacts = draft.get('count')
+
+    view_rate = float(db_get_setting("view_coin_rate", "4.8"))
+    react_rate = float(db_get_setting("coin_rate", "4.8"))
+
+    channel_str = f"@{channel}" if channel else "Not set"
+    
+    if views is not None:
+        view_cost = int(views * view_rate)
+        views_str = f"{views} = {view_cost} Coins/post"
+    else:
+        views_str = "Not set"
+
+    if reacts is not None:
+        react_cost = int(reacts * react_rate)
+        reacts_str = f"{reacts} = {react_cost} Coins/post"
+    else:
+        reacts_str = "Not set"
+
+    text = (
+        f"⚙️ Setup Menu\n\n"
+        f"🔗 Channel: {channel_str}\n"
+        f"👀 Views: {views_str}\n"
+        f"❤️ Reacts: {reacts_str}"
+    )
+
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔗 Channel Link", callback_data="setup_btn_channel")],
+        [InlineKeyboardButton("👀 Views", callback_data="setup_btn_views"), InlineKeyboardButton("❤️ Reacts", callback_data="setup_btn_reacts")],
+        [InlineKeyboardButton("✅ Save Setup", callback_data="setup_btn_save")]
+    ])
+
+    return text, kb
+
+async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = db_get_user(user_id)
 
@@ -491,184 +530,145 @@ async def start_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "target_url": None,
         "username": None,
         "emojis": "POSITIVE 👍❤️🔥",
-        "count": 100,
-        "views": 0
+        "count": None,
+        "views": None
     }
 
-    text = (
-        f"🛰 **ধাপ ১ • চ্যানেল সেটআপ**\n"
-        f"───────────────────\n\n"
-        f"১) আপনার চ্যানেলে @{BOT_USERNAME} কে **অ্যাডমিন** তৈরি করুন।\n"
-        f"২) আপনার চ্যানেলের পাবলিক লিংক পাঠান (যেমন: `https://t.me/your_channel`):"
-    )
-    await update.message.reply_text(text, reply_markup=cancel_keyboard())
-    return STEP_CHANNEL
+    text, kb = build_setup_dashboard_markup_and_text(context)
+    await update.message.reply_text(text, reply_markup=kb)
+    return STEP_SETUP_DASHBOARD
 
-async def save_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    txt = (msg.text or "").strip()
+async def setup_dashboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
 
+    if data == "setup_btn_channel":
+        await query.message.reply_text("🔗 চ্যানেলের ইউজারনেম দিন। যেমন: @YourChannel")
+        return STEP_INPUT_CHANNEL
+
+    elif data == "setup_btn_views":
+        view_rate = float(db_get_setting("view_coin_rate", "4.8"))
+        coins_1000 = int(1000 * view_rate)
+        await query.message.reply_text(f"👀 কত Views?\n(1000 Views = {coins_1000} Coins)\nসংখ্যা লিখুন:")
+        return STEP_INPUT_VIEWS
+
+    elif data == "setup_btn_reacts":
+        react_rate = float(db_get_setting("coin_rate", "4.8"))
+        coins_1000 = int(1000 * react_rate)
+        await query.message.reply_text(f"❤️ কত Reacts?\n(1000 Reacts = {coins_1000} Coins)\nসংখ্যা লিখুন:")
+        return STEP_INPUT_REACTS
+
+    elif data == "setup_btn_save":
+        draft = context.user_data.get('draft_project', {})
+        if not draft.get('username') or draft.get('views') is None or draft.get('count') is None:
+            await query.message.reply_text("❌ সেটআপ সম্পূর্ণ হয়নি! দয়া করে Channel Link, Views এবং Reacts অপশনগুলো সেট করুন।")
+            return STEP_SETUP_DASHBOARD
+
+        user_id = query.from_user.id
+        ch_username = draft.get('username')
+        
+        try:
+            chat_info = await context.bot.get_chat(f"@{ch_username}")
+            channel_id = str(chat_info.id)
+            channel_title = chat_info.title or ch_username
+        except Exception as e:
+            channel_id = f"channel_{ch_username}"
+            channel_title = ch_username
+
+        draft['channel_id'] = channel_id
+        draft['channel_name'] = channel_title
+        draft['target_url'] = f"https://t.me/{ch_username}"
+
+        u_data = db_get_user(user_id)
+        u_data['projects'] = [p for p in u_data.get('projects', []) if str(p.get('channel_id')) != channel_id]
+        u_data['projects'].append(draft)
+        db_save_user(u_data)
+
+        view_rate = float(db_get_setting("view_coin_rate", "4.8"))
+        react_rate = float(db_get_setting("coin_rate", "4.8"))
+        v_cost = int(draft['views'] * view_rate)
+        r_cost = int(draft['count'] * react_rate)
+
+        saved_msg = (
+            f"✅ Setup Saved!\n\n"
+            f"📡 @{ch_username}\n"
+            f"👀 Views: {draft['views']} ({v_cost} Coins/post)\n"
+            f"❤️ Reacts: {draft['count']} ({r_cost} Coins/post)"
+        )
+        await query.message.reply_text(saved_msg)
+        context.user_data.pop('draft_project', None)
+        return ConversationHandler.END
+
+async def handle_input_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = (update.message.text or "").strip()
     if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
         context.user_data.pop('draft_project', None)
-        await msg.reply_text("প্রসেস বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
+        await update.message.reply_text("প্রসেস বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
-    if "https://t.me/" not in txt:
-        await msg.reply_text("❌ অকার্যকর লিংক! লিংক অবশ্যই 'https://t.me/' দিয়ে শুরু হতে হবে। আবার চেষ্টা করুন:")
-        return STEP_CHANNEL
+    clean_uname = txt.replace("https://t.me/", "").replace("@", "").strip()
+    if not clean_uname:
+        await update.message.reply_text("❌ অকার্যকর ইউজারনেম! সঠিক ইউজারনেম দিন। যেমন: @YourChannel")
+        return STEP_INPUT_CHANNEL
 
-    match = re.search(r'https://t\.me/([^\s/]+)', txt)
-    if not match:
-        await msg.reply_text("❌ চ্যানেলের লিংক পাওয়া যায়নি! আবার লিংকটি পাঠান:")
-        return STEP_CHANNEL
-
-    ch_username = match.group(1).replace("@", "")
-    context.user_data['draft_project']['target_url'] = f"https://t.me/{ch_username}"
-    context.user_data['draft_project']['username'] = ch_username
-
-    return await render_count_menu(update, context)
-
-# 📊 Step 2 • Reaction Count
-async def render_count_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
-    text = (
-        f"📊 **ধাপ ২ • রিয়্যাকশন সংখ্যা সিলেকশন**\n"
-        f"───────────────────\n"
-        f"👉 বর্তমান রিয়্যাকশন সংখ্যা: **{draft.get('count', 100)}**"
-    )
-    keyboard = [
-        [InlineKeyboardButton("10", callback_data="cnt_10"), InlineKeyboardButton("20", callback_data="cnt_20"), InlineKeyboardButton("30", callback_data="cnt_30"), InlineKeyboardButton("50", callback_data="cnt_50")],
-        [InlineKeyboardButton("100", callback_data="cnt_100"), InlineKeyboardButton("200", callback_data="cnt_200"), InlineKeyboardButton("300", callback_data="cnt_300"), InlineKeyboardButton("500", callback_data="cnt_500")],
-        [InlineKeyboardButton("1000", callback_data="cnt_1000"), InlineKeyboardButton("2000", callback_data="cnt_2000"), InlineKeyboardButton("3000", callback_data="cnt_3000"), InlineKeyboardButton("5000", callback_data="cnt_5000")],
-        [InlineKeyboardButton("Continue ➔", callback_data="cnt_done")]
-    ]
-    
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-    else:
-        await context.bot.send_message(chat_id=update.effective_user.id, text=text, reply_markup=InlineKeyboardMarkup(keyboard))
-    return STEP_COUNT
+    draft['username'] = clean_uname
+    draft['target_url'] = f"https://t.me/{clean_uname}"
 
-async def count_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    draft = context.user_data.get('draft_project', {})
+    # Auto ask Views if Views is not set yet
+    if draft.get('views') is None:
+        view_rate = float(db_get_setting("view_coin_rate", "4.8"))
+        coins_1000 = int(1000 * view_rate)
+        await update.message.reply_text(f"👀 কত Views?\n(1000 Views = {coins_1000} Coins)\nসংখ্যা লিখুন:")
+        return STEP_INPUT_VIEWS
 
-    if query.data == "cnt_done":
-        return await render_views_menu(update, context)
+    text, kb = build_setup_dashboard_markup_and_text(context)
+    await update.message.reply_text(text, reply_markup=kb)
+    return STEP_SETUP_DASHBOARD
 
-    draft['count'] = int(query.data.split("_")[1])
-    return await render_count_menu(update, context)
-
-# 👁️ Step 3 • Views Count
-async def render_views_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    draft = context.user_data.get('draft_project', {})
-    text = (
-        f"👁️ **ধাপ ৩ • ভিউ সিলেকশন**\n"
-        f"───────────────────\n"
-        f"👉 বর্তমান ভিউ: **{draft.get('views', 0)}**\n"
-        f"(কোন পোস্ট করা মাত্রই অটোমেটিক ভিউ যোগ হবে)"
-    )
-    keyboard = [
-        [InlineKeyboardButton("0 (OFF)", callback_data="vw_0"), InlineKeyboardButton("10", callback_data="vw_10"), InlineKeyboardButton("20", callback_data="vw_20"), InlineKeyboardButton("30", callback_data="vw_30")],
-        [InlineKeyboardButton("50", callback_data="vw_50"), InlineKeyboardButton("100", callback_data="vw_100"), InlineKeyboardButton("200", callback_data="vw_200"), InlineKeyboardButton("500", callback_data="vw_500")],
-        [InlineKeyboardButton("1000", callback_data="vw_1000"), InlineKeyboardButton("2000", callback_data="vw_2000"), InlineKeyboardButton("3000", callback_data="vw_3000"), InlineKeyboardButton("5000", callback_data="vw_5000")],
-        [InlineKeyboardButton("Finish & Review ✅", callback_data="vw_done")]
-    ]
-    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-    return STEP_VIEWS
-
-async def views_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    draft = context.user_data.get('draft_project', {})
-
-    if query.data == "vw_done":
-        return await render_review_menu(update, context)
-
-    draft['views'] = int(query.data.split("_")[1])
-    return await render_views_menu(update, context)
-
-# ✨ Final Review
-async def render_review_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    draft = context.user_data.get('draft_project', {})
-
-    text = (
-        f"✨ **চূড়ান্ত তথ্য পর্যালোচনা** ✨\n"
-        f"───────────────────\n\n"
-        f"🔗 চ্যানেল লিংক: {draft.get('target_url')}\n"
-        f"👍 রিয়্যাকশন অপশন: {draft.get('react_status', 'ON')}\n"
-        f"👁️ ভিউ অপশন: {draft.get('view_status', 'ON')}\n"
-        f"😊 রিয়্যাকশন ইমোজি: {draft.get('emojis')}\n"
-        f"🚀 রিয়্যাকশন সংখ্যা: {draft.get('count')}\n"
-        f"👁️ ভিউ: {draft.get('views')}\n\n"
-        f"সবকিছু ঠিক থাকলে '✅ Create Project' বাটনে ক্লিক করুন।"
-    )
-    keyboard = [
-        [InlineKeyboardButton("✅ Create Project", callback_data="create_final")],
-        [InlineKeyboardButton("❌ Cancel", callback_data="cancel_flow")]
-    ]
-    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-    return STEP_REVIEW
-
-async def finalize_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-
-    draft = context.user_data.get('draft_project')
-    if not draft or not draft.get('target_url'):
-        await query.message.reply_text("❌ কিছু ভুল হয়েছে, দয়া করে আবার চেষ্টা করুন!", reply_markup=get_user_keyboard())
-        return ConversationHandler.END
-
-    ch_username = draft.get('username')
-    try:
-        chat_info = await context.bot.get_chat(f"@{ch_username}")
-        channel_id = str(chat_info.id)
-        channel_title = chat_info.title or ch_username
-
-        try:
-            await context.bot.send_message(
-                chat_id=chat_info.id,
-                text=f"🤖 **বট সফলভাবে কানেক্ট হয়েছে!**\n\n"
-                     f"✅ @{BOT_USERNAME} সফলভাবে এই চ্যানেলে যুক্ত হয়েছে।\n"
-                     f"🚀 প্রতিটি নতুন পোস্টের জন্য স্বয়ংক্রিয় রিয়্যাকশন ও ভিউ অর্ডার ট্রিগার হবে।"
-            )
-        except Exception as e:
-            logger.warning(f"Failed to send confirmation message to channel: {e}")
-
-    except Exception as e:
-        logger.error(f"Failed to fetch channel @{ch_username}: {e}")
-        await query.message.reply_text(
-            f"❌ চ্যানেলের সাথে কানেক্ট করা সম্ভব হয়নি!\n\n"
-            f"⚠️ নিশ্চিত করুন বটটি আপনার চ্যানেলে **অ্যাডমিন** হিসেবে যুক্ত আছে।", 
-            reply_markup=get_user_keyboard()
-        )
+async def handle_input_views(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = (update.message.text or "").strip()
+    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
         context.user_data.pop('draft_project', None)
+        await update.message.reply_text("প্রসেস বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
-    u_data = db_get_user(user_id)
-    draft['channel_id'] = channel_id
-    draft['channel_name'] = channel_title
+    if not txt.isdigit():
+        await update.message.reply_text("❌ দয়া করে একটি সঠিক সংখ্যা লিখুন!")
+        return STEP_INPUT_VIEWS
 
-    u_data['projects'] = [p for p in u_data.get('projects', []) if str(p.get('channel_id')) != channel_id]
-    u_data['projects'].append(draft)
-    db_save_user(u_data)
+    draft = context.user_data.get('draft_project', {})
+    draft['views'] = int(txt)
 
-    context.user_data.pop('draft_project', None)
+    # Auto ask Reacts if Reacts is not set yet
+    if draft.get('count') is None:
+        react_rate = float(db_get_setting("coin_rate", "4.8"))
+        coins_1000 = int(1000 * react_rate)
+        await update.message.reply_text(f"❤️ কত Reacts?\n(1000 Reacts = {coins_1000} Coins)\nসংখ্যা লিখুন:")
+        return STEP_INPUT_REACTS
 
-    await query.message.reply_text(
-        f"🎉 **প্রজেক্ট সফলভাবে তৈরি হয়েছে!**\n\n"
-        f"📁 চ্যানেল: {channel_title}\n"
-        f"🆔 চ্যানেল আইডি: `{channel_id}`\n"
-        f"👍 রিয়্যাকশন: {draft.get('react_status', 'ON')}\n"
-        f"👁️ ভিউ: {draft.get('view_status', 'ON')}\n"
-        f"🚀 রিয়্যাকশন সংখ্যা: {draft['count']}\n"
-        f"👁️ ভিউ: {draft['views']}\n\n"
-        f"✅ প্রজেক্ট চালু হয়েছে! এখন থেকে পোস্ট করা মাত্রই অটোমেটিক সার্ভিস চালু হয়ে যাবে।",
-        reply_markup=get_user_keyboard()
-    )
-    return ConversationHandler.END
+    text, kb = build_setup_dashboard_markup_and_text(context)
+    await update.message.reply_text(text, reply_markup=kb)
+    return STEP_SETUP_DASHBOARD
+
+async def handle_input_reacts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = (update.message.text or "").strip()
+    if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
+        context.user_data.pop('draft_project', None)
+        await update.message.reply_text("প্রসেস বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
+        return ConversationHandler.END
+
+    if not txt.isdigit():
+        await update.message.reply_text("❌ দয়া করে একটি সঠিক সংখ্যা লিখুন!")
+        return STEP_INPUT_REACTS
+
+    draft = context.user_data.get('draft_project', {})
+    draft['count'] = int(txt)
+
+    text, kb = build_setup_dashboard_markup_and_text(context)
+    await update.message.reply_text(text, reply_markup=kb)
+    return STEP_SETUP_DASHBOARD
 
 async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('draft_project', None)
@@ -912,25 +912,22 @@ async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if 0 <= idx < len(projects):
         if field == 'channel':
-            if "https://t.me/" not in val_txt:
-                await update.message.reply_text("❌ অকার্যকর লিংক! লিংক অবশ্যই 'https://t.me/' দিয়ে শুরু হতে হবে। আবার চেষ্টা করুন:")
+            clean_uname = val_txt.replace("https://t.me/", "").replace("@", "").strip()
+            if not clean_uname:
+                await update.message.reply_text("❌ অকার্যকর ইউজারনেম! আবার পাঠান:")
                 return STEP_EDIT_VALUE
 
-            match = re.search(r'https://t\.me/([^\s/]+)', val_txt)
-            if not match:
-                await update.message.reply_text("❌ চ্যানেলের লিংক পাওয়া যায়নি! আবার লিংকটি পাঠান:")
-                return STEP_EDIT_VALUE
-
-            ch_username = match.group(1).replace("@", "")
             try:
-                chat_info = await context.bot.get_chat(f"@{ch_username}")
+                chat_info = await context.bot.get_chat(f"@{clean_uname}")
                 projects[idx]['channel_id'] = str(chat_info.id)
-                projects[idx]['channel_name'] = chat_info.title or ch_username
-                projects[idx]['target_url'] = f"https://t.me/{ch_username}"
-                projects[idx]['username'] = ch_username
+                projects[idx]['channel_name'] = chat_info.title or clean_uname
+                projects[idx]['target_url'] = f"https://t.me/{clean_uname}"
+                projects[idx]['username'] = clean_uname
             except Exception as e:
-                await update.message.reply_text("❌ বট চ্যানেলে এক্সেস করতে পারছে না! বটটি সেই চ্যানেলে **অ্যাডমিন** আছে কিনা নিশ্চিত হয়ে আবার লিংক পাঠান:")
-                return STEP_EDIT_VALUE
+                projects[idx]['channel_id'] = f"channel_{clean_uname}"
+                projects[idx]['channel_name'] = clean_uname
+                projects[idx]['target_url'] = f"https://t.me/{clean_uname}"
+                projects[idx]['username'] = clean_uname
 
         elif field in ['count', 'views']:
             try:
@@ -1038,8 +1035,8 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
     if not matched_projects:
         return
 
-    coin_rate = float(db_get_setting("coin_rate", "1"))
-    view_coin_rate = float(db_get_setting("view_coin_rate", "1"))
+    coin_rate = float(db_get_setting("coin_rate", "4.8"))
+    view_coin_rate = float(db_get_setting("view_coin_rate", "4.8"))
     view_service_id = db_get_setting("smm_view_service_id", "7294")
 
     for uid, uinfo, proj in matched_projects:
@@ -1142,7 +1139,7 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                     db_save_user(uinfo)
                     db_add_order(uid, view_res["order"], ch_name, views_count, post_link, order_type="Views", status="completed")
 
-# 👑 Admin Handlers: Search User & Actions (Image replica)
+# 👑 Admin Handlers: Search User & Actions
 def build_user_card_text_and_markup(uid):
     u_data = db_get_user(uid)
     if not u_data:
@@ -1344,8 +1341,8 @@ async def admin_settings_edit_callback(update: Update, context: ContextTypes.DEF
             "smm_api_key": "🔑 **নতুন SMM Panel API Key পাঠান:**",
             "smm_service_id": "🧪 **নতুন SMM Reaction Service ID পাঠান:**",
             "smm_view_service_id": "👁️ **নতুন SMM View Service ID পাঠান:**",
-            "coin_rate": "💡 **নতুন Reaction Coin Rate লিখুন:**\n(যেমন: `1` মানে ১ কয়েন = ১টি রিয়েকশন, `0.5` মানে ১ কয়েন = ২টি রিয়েকশন)",
-            "view_coin_rate": "👁️ **নতুন View Coin Rate লিখুন:**\n(যেমন: `1` মানে ১ কয়েন = ১টি ভিউ, `0.5` মানে ১ কয়েন = ২টি ভিউ)",
+            "coin_rate": "💡 **নতুন Reaction Coin Rate লিখুন:**\n(যেমন: `4.8` মানে ১টি রিয়েকশন = ৪.৮ কয়েন)",
+            "view_coin_rate": "👁️ **নতুন View Coin Rate লিখুন:**\n(যেমন: `4.8` মানে ১টি ভিউ = ৪.৮ কয়েন)",
             "dollar_rate": "💵 **নতুন Dollar Rate ($1 = ? Coins) লিখুন:**\n(যেমন: `1000` মানে $1 = 1000 Coins)",
             "referral_bonus": "👥 **রেফারেল বোনাসের নতুন Coins সংখ্যা লিখুন:**\n(যেমন: `100`, `200`)"
         }
@@ -1454,8 +1451,8 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
         )
 
     elif data == "dash_coin_rate":
-        curr_rate = db_get_setting("coin_rate", "1")
-        curr_view_rate = db_get_setting("view_coin_rate", "1")
+        curr_rate = db_get_setting("coin_rate", "4.8")
+        curr_view_rate = db_get_setting("view_coin_rate", "4.8")
         curr_dollar = db_get_setting("dollar_rate", "1000")
         
         kb = InlineKeyboardMarkup([
@@ -1612,7 +1609,7 @@ if __name__ == '__main__':
 
     conv_handler = ConversationHandler(
         entry_points=[
-            MessageHandler(filters.Regex("^⚙️ Setup$"), start_project),
+            MessageHandler(filters.Regex("^⚙️ Setup$"), start_setup_flow),
             MessageHandler(filters.Regex("^💰 Top-up$"), start_topup),
             MessageHandler(filters.Regex("^👤 Search User$"), start_search_user),
             MessageHandler(filters.Regex("^📢 Send SMS$"), start_broadcast),
@@ -1621,13 +1618,10 @@ if __name__ == '__main__':
             CallbackQueryHandler(admin_user_action_callback, pattern="^uact_")
         ],
         states={
-            STEP_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_channel)],
-            STEP_COUNT: [CallbackQueryHandler(count_callback, pattern="^cnt_")],
-            STEP_VIEWS: [CallbackQueryHandler(views_callback, pattern="^vw_")],
-            STEP_REVIEW: [
-                CallbackQueryHandler(finalize_project, pattern="^create_final$"),
-                CallbackQueryHandler(cancel_flow, pattern="^cancel_flow$")
-            ],
+            STEP_SETUP_DASHBOARD: [CallbackQueryHandler(setup_dashboard_callback, pattern="^setup_btn_")],
+            STEP_INPUT_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_channel)],
+            STEP_INPUT_VIEWS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_views)],
+            STEP_INPUT_REACTS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_reacts)],
             STEP_EDIT_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_value)],
             STEP_ADMIN_SEARCH_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_search_user)],
             STEP_ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_broadcast)],
