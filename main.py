@@ -194,7 +194,6 @@ def db_get_user(user_id, username_val=""):
             "is_blocked": 0
         }
     
-    # Update username if provided
     current_uname = row[5] or ""
     if username_val and username_val != current_uname:
         cursor.execute("UPDATE users SET username = ? WHERE user_id = ?", (username_val, str_id))
@@ -312,7 +311,6 @@ def db_get_all_bot_orders(limit=50):
     conn.close()
     return rows
 
-# Topup DB Helpers
 def db_add_topup_request(user_id, txid, photo_id, amount):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -362,7 +360,6 @@ def db_update_topup_status(req_id, status):
  STEP_TOPUP_AMOUNT, STEP_TOPUP_PHOTO,
  STEP_ADMIN_ADD_COINS, STEP_ADMIN_DEDUCT_COINS) = range(13)
 
-# 🛒 SMM Order Submit Function
 def send_smm_order(link, quantity, service_id_override=None):
     api_key = db_get_setting("smm_api_key", "792d092f1f7fdcebcb9233107b2f1f33")
     service_id = service_id_override if service_id_override else db_get_setting("smm_service_id", "1936")
@@ -383,7 +380,6 @@ def send_smm_order(link, quantity, service_id_override=None):
         logger.error(f"SMM API Error: {e}")
         return {"error": str(e)}
 
-# 💳 SMM Panel Balance Check Function
 def get_smm_balance():
     api_key = db_get_setting("smm_api_key", "792d092f1f7fdcebcb9233107b2f1f33")
     payload = {
@@ -474,7 +470,6 @@ async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(text, reply_markup=get_admin_keyboard())
 
 # --- ⚙️ SETUP LOGIC ---
-
 def build_setup_dashboard_markup_and_text(context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
     channel = draft.get('username')
@@ -514,7 +509,6 @@ def build_setup_dashboard_markup_and_text(context: ContextTypes.DEFAULT_TYPE):
     return text, kb
 
 async def update_setup_message(context: ContextTypes.DEFAULT_TYPE):
-    """Helper function to edit the existing Setup Dashboard message"""
     setup_msg_id = context.user_data.get('setup_msg_id')
     chat_id = context.user_data.get('setup_chat_id')
     
@@ -624,11 +618,8 @@ async def setup_dashboard_callback(update: Update, context: ContextTypes.DEFAULT
 
 async def handle_input_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (update.message.text or "").strip()
-    
-    try:
-        await update.message.delete()
-    except Exception:
-        pass
+    try: await update.message.delete()
+    except Exception: pass
 
     if txt in ["❌ Cancel", "Cancel"]:
         context.user_data.pop('draft_project', None)
@@ -655,11 +646,8 @@ async def handle_input_channel(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def handle_input_views(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (update.message.text or "").strip()
-    
-    try:
-        await update.message.delete()
-    except Exception:
-        pass
+    try: await update.message.delete()
+    except Exception: pass
 
     if txt in ["❌ Cancel", "Cancel"]:
         context.user_data.pop('draft_project', None)
@@ -684,11 +672,8 @@ async def handle_input_views(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def handle_input_reacts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (update.message.text or "").strip()
-    
-    try:
-        await update.message.delete()
-    except Exception:
-        pass
+    try: await update.message.delete()
+    except Exception: pass
 
     if txt in ["❌ Cancel", "Cancel"]:
         context.user_data.pop('draft_project', None)
@@ -753,8 +738,7 @@ async def save_topup_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     try:
         usd_val = float(txt)
-        if usd_val <= 0:
-            raise ValueError
+        if usd_val <= 0: raise ValueError
     except ValueError:
         await update.message.reply_text("❌ Invalid amount! Please enter a valid number (e.g., 1, 5, 10):")
         return STEP_TOPUP_AMOUNT
@@ -802,7 +786,6 @@ async def save_topup_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return ConversationHandler.END
 
-# 💳 Top-up Approve / Reject Callback
 async def topup_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -842,7 +825,7 @@ async def topup_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
                      f"💳 Current Balance: {u_data['credit']} Coins"
             )
         except Exception as e:
-            logger.error(f"Failed to notify user for approved topup: {e}")
+            logger.error(f"Failed to notify user: {e}")
 
     elif data.startswith("topup_reject_"):
         req_id = int(data.split("_")[2])
@@ -866,11 +849,10 @@ async def topup_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
         try:
             await context.bot.send_message(
                 chat_id=int(uid),
-                text=f"❌ **Your top-up request has been rejected!**\n\n"
-                     f"Contact admin if needed."
+                text=f"❌ **Your top-up request has been rejected!**\n\nContact admin if needed."
             )
         except Exception as e:
-            logger.error(f"Failed to notify user for rejected topup: {e}")
+            logger.error(f"Failed to notify user: {e}")
 
 # 🛠️ Project Action Callback
 async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -911,8 +893,7 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
                 [InlineKeyboardButton("🔙 Back", callback_data="p_back")]
             ]
             await query.edit_message_text(
-                f"✏️ **Edit:** {proj.get('channel_name')}\n\n"
-                f"Select an option to edit:",
+                f"✏️ **Edit:** {proj.get('channel_name')}\n\nSelect an option to edit:",
                 reply_markup=InlineKeyboardMarkup(kb)
             )
             return STEP_EDIT_FIELD
@@ -968,7 +949,7 @@ async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 projects[idx]['channel_name'] = chat_info.title or clean_uname
                 projects[idx]['target_url'] = f"https://t.me/{clean_uname}"
                 projects[idx]['username'] = clean_uname
-            except Exception as e:
+            except Exception:
                 projects[idx]['channel_id'] = f"channel_{clean_uname}"
                 projects[idx]['channel_name'] = clean_uname
                 projects[idx]['target_url'] = f"https://t.me/{clean_uname}"
@@ -989,7 +970,6 @@ async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return ConversationHandler.END
 
-# 📂 Display Projects function
 async def show_my_projects(message_obj, user_id):
     u_data = db_get_user(user_id)
     projects = u_data.get('projects', [])
@@ -1021,7 +1001,6 @@ async def show_my_projects(message_obj, user_id):
         )
         await message_obj.reply_text(p_text, reply_markup=InlineKeyboardMarkup(kb))
 
-# 📋 Display Completed Orders List
 async def show_order_list(message_obj, user_id):
     orders = db_get_user_orders(user_id)
     if not orders:
@@ -1094,7 +1073,6 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
         view_status = proj.get("view_status", "ON")
 
         if react_status == "OFF" and view_status == "OFF":
-            logger.info(f"⏸️ Reaction & Views both OFF for Channel {ch_name}. Skipping order.")
             continue
 
         needed_react_coins = int(reaction_count * coin_rate) if react_status == "ON" else 0
@@ -1108,17 +1086,14 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
             clean_cid = raw_channel_id.replace("-100", "")
             post_link = f"https://t.me/c/{clean_cid}/{post_id}"
 
-        # Send Reaction Order if Reaction is ON
         if react_status == "ON":
             if uinfo.get("credit", 0) < needed_react_coins:
                 try:
                     await context.bot.send_message(
                         chat_id=user_chat_id,
                         text=f"⚠️ **Insufficient balance for reaction!**\n\n"
-                             f"📢 **Channel:** {ch_name}\n"
-                             f"📌 **Post Link:** {post_link}\n"
-                             f"Required coins: {needed_react_coins}\n"
-                             f"Remaining coins: {uinfo.get('credit', 0)}\n\n"
+                             f"📢 **Channel:** {ch_name}\n📌 **Post Link:** {post_link}\n"
+                             f"Required coins: {needed_react_coins}\nRemaining coins: {uinfo.get('credit', 0)}\n\n"
                              f"Please recharge your account balance."
                     )
                 except Exception as e:
@@ -1132,59 +1107,40 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
                     db_save_user(uinfo)
                     db_add_order(uid, order_id, ch_name, reaction_count, post_link, order_type="Reacts", status="completed")
 
-                    log_message = (
-                        f" ORDER UPDATE\n"
-                        f"#{order_id}\n"
-                        f"Reacts|{reaction_count}\n"
-                        f"PENDING"
-                    )
-
+                    log_message = f" ORDER UPDATE\n#{order_id}\nReacts|{reaction_count}\nPENDING"
                     try:
-                        await context.bot.send_message(
-                            chat_id=LOG_CHANNEL,
-                            text=log_message
-                        )
+                        await context.bot.send_message(chat_id=LOG_CHANNEL, text=log_message)
                     except Exception as e:
-                        logger.error(f"Failed to send order success alert to {LOG_CHANNEL}: {e}")
+                        logger.error(f"Failed to send order success alert: {e}")
                 else:
                     err_msg = smm_res.get("error") or smm_res.get("message") or "SMM Server Response Error"
                     post_btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔗 View Post", url=post_link)]])
                     try:
                         await context.bot.send_message(
                             chat_id=user_chat_id,
-                            text=f"❌ **Reaction order failed!**\n\n"
-                                 f"📢 **Channel:** {ch_name}\n"
-                                 f"⚠️ **Reason:** `{err_msg}`\n\n"
-                                 f"📌 **Post Link:** {post_link}",
+                            text=f"❌ **Reaction order failed!**\n\n📢 **Channel:** {ch_name}\n⚠️ **Reason:** `{err_msg}`\n\n📌 **Post Link:** {post_link}",
                             reply_markup=post_btn
                         )
                     except Exception as e:
                         logger.error(f"Failed to send order fail alert: {e}")
 
-        # Send Views Order if Views is ON & views_count > 0
         if view_status == "ON" and views_count > 0:
             if uinfo.get("credit", 0) < needed_view_coins:
                 try:
                     await context.bot.send_message(
                         chat_id=user_chat_id,
-                        text=f"⚠️ **Insufficient balance for views!**\n\n"
-                             f"📢 **Channel:** {ch_name}\n"
-                             f"📌 **Post Link:** {post_link}\n"
-                             f"Required coins: {needed_view_coins}\n"
-                             f"Remaining coins: {uinfo.get('credit', 0)}\n\n"
-                             f"Please recharge your account balance."
+                        text=f"⚠️ **Insufficient balance for views!**\n\n📢 **Channel:** {ch_name}\n📌 **Post Link:** {post_link}\nRequired coins: {needed_view_coins}\nRemaining coins: {uinfo.get('credit', 0)}\n\nPlease recharge your account balance."
                     )
                 except Exception as e:
-                    logger.error(f"Error sending low balance msg for views: {e}")
+                    logger.error(f"Error sending low balance msg: {e}")
             else:
                 view_res = send_smm_order(post_link, views_count, service_id_override=view_service_id)
-                logger.info(f"📹 View Order Response: {view_res}")
                 if view_res and "order" in view_res:
                     uinfo["credit"] -= needed_view_coins
                     db_save_user(uinfo)
                     db_add_order(uid, view_res["order"], ch_name, views_count, post_link, order_type="Views", status="completed")
 
-# 👑 Admin Handlers: Search User & Actions
+# 👑 Admin Search User & Actions
 def build_user_card_text_and_markup(uid):
     u_data = db_get_user(uid)
     if not u_data:
@@ -1195,10 +1151,7 @@ def build_user_card_text_and_markup(uid):
     total_orders = db_get_user_orders_count(uid)
 
     projects = u_data.get('projects', [])
-    if projects:
-        channels_str = ", ".join([p.get('channel_name', 'Channel') for p in projects])
-    else:
-        channels_str = "None"
+    channels_str = ", ".join([p.get('channel_name', 'Channel') for p in projects]) if projects else "None"
 
     is_b = u_data.get("is_blocked", 0) == 1
     status_str = "Banned 🔴" if is_b else "Active 🟢"
@@ -1244,7 +1197,6 @@ async def process_admin_search_user(update: Update, context: ContextTypes.DEFAUL
         await update.message.reply_text("❌ User ID not found in database!", reply_markup=get_admin_keyboard())
     return ConversationHandler.END
 
-# Admin Inline Action Callback (Add, Deduct, Ban, Orders)
 async def admin_user_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1258,18 +1210,12 @@ async def admin_user_action_callback(update: Update, context: ContextTypes.DEFAU
 
     if action == "add":
         context.user_data['admin_action_target'] = target_uid
-        await query.message.reply_text(
-            f"➕ **Enter coin amount to add for User ID `{target_uid}`:**",
-            reply_markup=cancel_keyboard()
-        )
+        await query.message.reply_text(f"➕ **Enter coin amount to add for User ID `{target_uid}`:**", reply_markup=cancel_keyboard())
         return STEP_ADMIN_ADD_COINS
 
     elif action == "deduct":
         context.user_data['admin_action_target'] = target_uid
-        await query.message.reply_text(
-            f"➖ **Enter coin amount to deduct from User ID `{target_uid}`:**",
-            reply_markup=cancel_keyboard()
-        )
+        await query.message.reply_text(f"➖ **Enter coin amount to deduct from User ID `{target_uid}`:**", reply_markup=cancel_keyboard())
         return STEP_ADMIN_DEDUCT_COINS
 
     elif action == "ban":
@@ -1372,7 +1318,7 @@ async def process_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_
     await update.message.reply_text(f"🎉 Message successfully sent to {count} users!", reply_markup=get_admin_keyboard())
     return ConversationHandler.END
 
-# ⚙️ Dynamic Settings Edit Handlers
+# ⚙️ Settings Edit Handlers
 async def admin_settings_edit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1411,7 +1357,7 @@ async def process_admin_edit_setting(update: Update, context: ContextTypes.DEFAU
     await update.message.reply_text(f"🎉 **{key.upper()} updated successfully:** `{txt}`", reply_markup=get_admin_keyboard())
     return ConversationHandler.END
 
-# 🎛️ Admin Dashboard Inline Callbacks Handler
+# 🎛️ Admin Dashboard Callbacks
 async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1442,15 +1388,10 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
         if bal_res and "balance" in bal_res:
             bal = bal_res.get("balance", "0")
             currency = bal_res.get("currency", "USD")
-            await query.message.reply_text(
-                f"💳 **SMM Panel Balance:**\n───────────────────\n"
-                f"💰 Current Balance: **{bal} {currency}**"
-            )
+            await query.message.reply_text(f"💳 **SMM Panel Balance:**\n───────────────────\n💰 Current Balance: **{bal} {currency}**")
         else:
             err = bal_res.get("error") or bal_res.get("message") or "Unknown error"
-            await query.message.reply_text(
-                f"❌ **Panel Balance Fetch Failed!**\n\nReason: `{err}`"
-            )
+            await query.message.reply_text(f"❌ **Panel Balance Fetch Failed!**\n\nReason: `{err}`")
         return
 
     elif data == "dash_all_orders":
@@ -1477,7 +1418,7 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
             ])
             try:
                 await query.message.reply_photo(photo=photo_id, caption=caption_text, reply_markup=kb)
-            except Exception as e:
+            except Exception:
                 await query.message.reply_text(f"{caption_text}\n\n⚠️ Failed to load image.", reply_markup=kb)
         return
 
@@ -1547,7 +1488,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text and text.lower() in ["admin"]:
         return await admin_panel_command(update, context)
 
-    # Check for direct Admin Credit addition format: "USER_ID AMOUNT"
+    # Admin direct balance add shortcut
     if user_id in ADMIN_IDS and len(text.split()) == 2:
         parts = text.split()
         if parts[0].isdigit() and (parts[1].isdigit() or (parts[1].startswith('-') and parts[1][1:].isdigit())):
@@ -1559,7 +1500,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(f"✅ New balance for User `{target_id}`: {target_u['credit']} Coins", reply_markup=get_admin_keyboard())
                 return
 
-    # 👑 Admin Actions
     if user_id in ADMIN_IDS:
         if text == "📊 Admin Dashboard":
             admin_dash_inline_kb = InlineKeyboardMarkup([
@@ -1581,11 +1521,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for uid, uinfo in list(all_u.items())[:30]:
                 uname = f"@{uinfo['username']}" if uinfo.get('username') else "N/A"
                 projects = uinfo.get('projects', [])
-                if projects:
-                    ch_names = ", ".join([p.get('channel_name', 'Channel') for p in projects])
-                else:
-                    ch_names = "None"
-                
+                ch_names = ", ".join([p.get('channel_name', 'Channel') for p in projects]) if projects else "None"
                 spent_coins = db_get_user_spent_coins(uid)
 
                 u_list += (
@@ -1606,7 +1542,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif text == "🏠 Main Menu":
             return await update.message.reply_text("🏠 Main Menu:", reply_markup=get_user_keyboard())
 
-    # 👤 Regular User Actions
     if text == "👤 Profile":
         spent_coins = db_get_user_spent_coins(str_id)
         profile_text = (
@@ -1654,49 +1589,85 @@ if __name__ == '__main__':
         .build()
     )
 
-    conv_handler = ConversationHandler(
-        entry_points=[
-            MessageHandler(filters.Regex("^⚙️ Setup$"), start_setup_flow),
-            MessageHandler(filters.Regex("^💰 Top-up$"), start_topup),
-            MessageHandler(filters.Regex("^👤 Search User$"), start_search_user),
-            MessageHandler(filters.Regex("^📢 Send SMS$"), start_broadcast),
-            CallbackQueryHandler(project_action_callback, pattern="^p_edit_"),
-            CallbackQueryHandler(admin_settings_edit_callback, pattern="^edit_setting_"),
-            CallbackQueryHandler(admin_user_action_callback, pattern="^uact_")
-        ],
+    # 🔄 RESTRUCTURED HANDLERS FOR FIXED BUTTON RESPONSIBILITY
+    setup_conv_handler = ConversationHandler(
+        entry_points=[MessageHandler(filters.Regex("^⚙️ Setup$"), start_setup_flow)],
         states={
             STEP_SETUP_DASHBOARD: [CallbackQueryHandler(setup_dashboard_callback, pattern="^setup_btn_")],
             STEP_INPUT_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_channel)],
             STEP_INPUT_VIEWS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_views)],
-            STEP_INPUT_REACTS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_reacts)],
-            STEP_EDIT_FIELD: [CallbackQueryHandler(project_action_callback, pattern="^fe_")],
-            STEP_EDIT_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_value)],
-            STEP_ADMIN_SEARCH_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_search_user)],
-            STEP_ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_broadcast)],
-            STEP_ADMIN_EDIT_SETTING: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_edit_setting)],
+            STEP_INPUT_REACTS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_reacts)]
+        },
+        fallbacks=[MessageHandler(filters.Regex("^(❌ Cancel|Cancel)$"), cancel_flow)]
+    )
+
+    topup_conv_handler = ConversationHandler(
+        entry_points=[MessageHandler(filters.Regex("^💰 Top-up$"), start_topup)],
+        states={
             STEP_TOPUP_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_topup_amount)],
             STEP_TOPUP_PHOTO: [
                 MessageHandler(filters.PHOTO, save_topup_photo),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, save_topup_photo)
-            ],
+            ]
+        },
+        fallbacks=[MessageHandler(filters.Regex("^(❌ Cancel|Cancel)$"), cancel_flow)]
+    )
+
+    admin_search_conv_handler = ConversationHandler(
+        entry_points=[
+            MessageHandler(filters.Regex("^👤 Search User$"), start_search_user),
+            CallbackQueryHandler(admin_user_action_callback, pattern="^uact_")
+        ],
+        states={
+            STEP_ADMIN_SEARCH_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_search_user)],
             STEP_ADMIN_ADD_COINS: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_add_coins)],
             STEP_ADMIN_DEDUCT_COINS: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_deduct_coins)]
         },
-        fallbacks=[
-            CommandHandler('start', start), 
-            MessageHandler(filters.Regex("^(❌ Cancel|Cancel)$"), cancel_flow),
-            CallbackQueryHandler(cancel_flow, pattern="^cancel_flow$")
-        ]
+        fallbacks=[MessageHandler(filters.Regex("^(❌ Cancel|Cancel)$"), cancel_flow)]
+    )
+
+    admin_broadcast_conv_handler = ConversationHandler(
+        entry_points=[MessageHandler(filters.Regex("^📢 Send SMS$"), start_broadcast)],
+        states={
+            STEP_ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_broadcast)]
+        },
+        fallbacks=[MessageHandler(filters.Regex("^(❌ Cancel|Cancel)$"), cancel_flow)]
+    )
+
+    admin_setting_conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(admin_settings_edit_callback, pattern="^edit_setting_")],
+        states={
+            STEP_ADMIN_EDIT_SETTING: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_edit_setting)]
+        },
+        fallbacks=[MessageHandler(filters.Regex("^(❌ Cancel|Cancel)$"), cancel_flow)]
+    )
+
+    project_edit_conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(project_action_callback, pattern="^p_edit_")],
+        states={
+            STEP_EDIT_FIELD: [CallbackQueryHandler(project_action_callback, pattern="^fe_")],
+            STEP_EDIT_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_value)]
+        },
+        fallbacks=[MessageHandler(filters.Regex("^(❌ Cancel|Cancel)$"), cancel_flow)]
     )
 
     channel_handler = MessageHandler(filters.ChatType.CHANNEL, auto_react_channel_post)
     
+    # 📌 Correct Order of Handlers
     app.add_handler(channel_handler)
-    app.add_handler(conv_handler)
+    app.add_handler(setup_conv_handler)
+    app.add_handler(topup_conv_handler)
+    app.add_handler(admin_search_conv_handler)
+    app.add_handler(admin_broadcast_conv_handler)
+    app.add_handler(admin_setting_conv_handler)
+    app.add_handler(project_edit_conv_handler)
+
+    # 📌 Standalone Callback Query Handlers
     app.add_handler(CallbackQueryHandler(topup_action_callback, pattern="^topup_"))
-    app.add_handler(CallbackQueryHandler(admin_user_action_callback, pattern="^uact_"))
-    app.add_handler(CallbackQueryHandler(project_action_callback, pattern="^(p_|fe_)"))
     app.add_handler(CallbackQueryHandler(admin_dashboard_inline_callback, pattern="^dash_"))
+    app.add_handler(CallbackQueryHandler(project_action_callback, pattern="^p_"))
+
+    # 📌 Command & Menu Text Handlers
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
