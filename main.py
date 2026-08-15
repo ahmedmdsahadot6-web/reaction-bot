@@ -1614,16 +1614,17 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 👤 Regular User Actions
     if text == "👤 Profile":
+        spent_coins = db_get_user_spent_coins(str_id)
         profile_text = (
             f"👤 **ইউজার প্রোফাইল**\n───────────────────\n"
             f"🆔 ইউজার আইডি: `{str_id}`\n"
             f"💰 কয়েন ব্যালেন্স: {u_data['credit']}\n"
-            f"💸 মোট খরচ:{spent_coins}\n"
+            f"💸 মোট খরচ: {spent_coins}\n"
             f"📁 সক্রিয় প্রজেক্ট: {len(u_data['projects'])}\n"
             f"👥 মোট রেফারেল: {u_data['ref_count']}\n"
             f"🎁 রেফারেল ইনকাম: {u_data['ref_credit']} coins"
         )
-        await update.message.reply_text(profile_text)
+        await update.message.reply_text(profile_text, parse_mode="Markdown")
 
     elif text == "🛠️ Settings":
         await show_my_projects(update.message, str_id)
