@@ -999,7 +999,7 @@ async def show_my_projects(message_obj, user_id):
     projects = u_data.get('projects', [])
 
     if not projects:
-        await message_obj.reply_text("❌ আপনার কোনো সক্রিয় প্রজেক্ট নেই।")
+        await message_obj.reply_text("❌ You don't have any active projects.")
         return
 
     for idx, p in enumerate(projects):
@@ -1014,14 +1014,14 @@ async def show_my_projects(message_obj, user_id):
             [InlineKeyboardButton("✏️ Edit Settings", callback_data=f"p_edit_{idx}")]
         ]
         p_text = (
-            f"🛠️ **প্রজেক্ট সেটিংস #{idx+1}: {p.get('channel_name', 'চ্যানেল')}**\n"
+            f"🛠️ **Project Settings #{idx+1}: {p.get('channel_name', 'Channel')}**\n"
             f"───────────────────\n"
-            f"🔗 লিংক: {p.get('target_url')}\n"
-            f"👍 রিয়্যাকশন সার্ভিস: **{r_st}**\n"
-            f"👁️ ভিউ সার্ভিস: **{v_st}**\n"
-            f"🚀 রিয়্যাকশন সংখ্যা: **{p.get('count', 100)}**\n"
-            f"👁️ ভিউ সংখ্যা: **{p.get('views', 0)}**\n"
-            f"😊 ইমোজি: **{p.get('emojis', 'POSITIVE')}**"
+            f"🔗 Link: {p.get('target_url')}\n"
+            f"👍 Reaction Service: **{r_st}**\n"
+            f"👁️ View Service: **{v_st}**\n"
+            f"🚀 Reaction Count: **{p.get('count', 100)}**\n"
+            f"👁️ View Count: **{p.get('views', 0)}**\n"
+            f"😊 Emoji: **{p.get('emojis', 'POSITIVE')}**"
         )
         await message_obj.reply_text(p_text, reply_markup=InlineKeyboardMarkup(kb))
 
@@ -1618,13 +1618,13 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "👤 Profile":
         spent_coins = db_get_user_spent_coins(str_id)
         profile_text = (
-            f"👤 **ইউজার প্রোফাইল**\n───────────────────\n"
-            f"🆔 ইউজার আইডি: `{str_id}`\n"
-            f"💰 কয়েন ব্যালেন্স: {u_data['credit']}\n"
-            f"💸 মোট খরচ: {spent_coins}\n"
-            f"📁 সক্রিয় প্রজেক্ট: {len(u_data['projects'])}\n"
-            f"👥 মোট রেফারেল: {u_data['ref_count']}\n"
-            f"🎁 রেফারেল ইনকাম: {u_data['ref_credit']} coins"
+            f"👤 **User Profile**\n───────────────────\n"
+            f"🆔 User ID: `{str_id}`\n"
+            f"💰 Coin Balance: {u_data['credit']}\n"
+            f"💸 Total Spent: {spent_coins}\n"
+            f"📁 Active Projects: {len(u_data['projects'])}\n"
+            f"👥 Total Referrals: {u_data['ref_count']}\n"
+            f"🎁 Referral Income: {u_data['ref_credit']} coins"
         )
         await update.message.reply_text(profile_text)
 
