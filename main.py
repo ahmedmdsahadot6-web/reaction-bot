@@ -171,7 +171,7 @@ def db_set_setting(key, value):
     conn.close()
 
 def db_get_user(user_id, username_val=""):
-    str_id = str(user_id)
+    str_id = str(user_id).strip()
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("SELECT credit, ref_count, ref_credit, projects, is_blocked, username FROM users WHERE user_id = ?", (str_id,))
@@ -215,7 +215,7 @@ def db_get_user(user_id, username_val=""):
     }
 
 def db_save_user(u_data):
-    str_id = str(u_data["user_id"])
+    str_id = str(u_data["user_id"]).strip()
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute('''
@@ -228,7 +228,7 @@ def db_save_user(u_data):
         u_data["ref_count"],
         u_data["ref_credit"],
         json.dumps(u_data["projects"], ensure_ascii=False),
-        u_data.get("is_blocked", 0),
+        int(u_data.get("is_blocked", 0)),
         str_id
     ))
     conn.commit()
@@ -536,6 +536,10 @@ async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = db_get_user(user_id)
 
+    if u_data.get("is_blocked", 0) == 1:
+        await update.message.reply_text("🚫 আপনাকে এই বটটি ব্যবহার করা থেকে ব্লক করা হয়েছে।")
+        return ConversationHandler.END
+
     if u_data['credit'] <= 0:
         clean_admin = ADMIN_USERNAME.replace("@", "")
         inline_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 Contact Admin", url=f"https://t.me/{clean_admin}")]])
@@ -735,6 +739,10 @@ async def start_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u_data = db_get_user(user_id)
     
+    if u_data.get("is_blocked", 0) == 1:
+        await update.message.reply_text("🚫 আপনাকে এই বটটি ব্যবহার করা থেকে ব্লক করা হয়েছে।")
+        return ConversationHandler.END
+
     binance_pay_id = "839892941"
     dollar_rate = db_get_setting("dollar_rate", "1000")
     context.user_data['topup_data'] = {}
@@ -1072,6 +1080,8 @@ async def auto_react_channel_post(update: Update, context: ContextTypes.DEFAULT_
     all_users = db_get_all_users()
 
     for uid, uinfo in all_users.items():
+        if uinfo.get("is_blocked", 0) == 1:
+            continue
         for proj in uinfo.get("projects", []):
             proj_cid = str(proj.get("channel_id", ""))
             proj_uname = str(proj.get("username", "")).lower().replace("@", "")
@@ -1367,7 +1377,9 @@ async def process_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_
 
     count = 0
     all_users = db_get_all_users()
-    for uid in all_users:
+    for uid, uinfo in all_users.items():
+        if uinfo.get("is_blocked", 0) == 1:
+            continue
         try:
             await context.bot.send_message(chat_id=int(uid), text=f"📢 **নোটিশ:**\n\n{msg_text}")
             count += 1
@@ -1551,6 +1563,10 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (update.message.text or "").strip()
     
     u_data = db_get_user(str_id, username_val=username)
+
+    if u_data.get("is_blocked", 0) == 1:
+        await update.message.reply_text("🚫 আপনাকে এই বটটি ব্যবহার করা থেকে ব্লক করা হয়েছে।")
+        return
 
     if text and text.lower() in ["admin", "অ্যাডমিন"]:
         return await admin_panel_command(update, context)
