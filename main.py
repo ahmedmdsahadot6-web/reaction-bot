@@ -720,13 +720,7 @@ async def handle_input_reacts(update: Update, context: ContextTypes.DEFAULT_TYPE
     return STEP_SETUP_DASHBOARD
 
 async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.pop('draft_project', None)
-    context.user_data.pop('setup_msg_id', None)
-    context.user_data.pop('setup_chat_id', None)
-    context.user_data.pop('edit_target', None)
-    context.user_data.pop('admin_edit_key', None)
-    context.user_data.pop('topup_data', None)
-    context.user_data.pop('admin_action_target', None)
+    context.user_data.clear()
     msg_text = "প্রসেস বাতিল করা হয়েছে।"
     if update.callback_query:
         await update.callback_query.message.reply_text(msg_text, reply_markup=get_user_keyboard())
@@ -753,7 +747,7 @@ async def start_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_TOPUP_AMOUNT
 
 async def save_topup_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    txt = update.message.text.strip()
+    txt = update.message.text.strip() if update.message.text else ""
     if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
         context.user_data.pop('topup_data', None)
         await update.message.reply_text("টপ-আপ প্রসেস বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
@@ -770,8 +764,10 @@ async def save_topup_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     dollar_rate = float(db_get_setting("dollar_rate", "1000"))
     calc_coins = int(usd_val * dollar_rate)
 
-    context.user_data['topup_data']['usd_amount'] = usd_val
-    context.user_data['topup_data']['amount'] = calc_coins
+    context.user_data['topup_data'] = {
+        'usd_amount': usd_val,
+        'amount': calc_coins
+    }
 
     await update.message.reply_text(
         f"💰 **আপনার ডিপোজিট:** ${usd_val} = **{calc_coins} Coins**\n\n"
@@ -1662,10 +1658,10 @@ if __name__ == '__main__':
 
     conv_handler = ConversationHandler(
         entry_points=[
-            MessageHandler(filters.Regex("^⚙️ Setup$"), start_setup_flow),
-            MessageHandler(filters.Regex("^💰 Top-up$"), start_topup),
-            MessageHandler(filters.Regex("^👤 Search User$"), start_search_user),
-            MessageHandler(filters.Regex("^📢 Send SMS$"), start_broadcast),
+            MessageHandler(filters.Regex("^(⚙️ Setup)$"), start_setup_flow),
+            MessageHandler(filters.Regex("^(💰 Top-up)$"), start_topup),
+            MessageHandler(filters.Regex("^(👤 Search User)$"), start_search_user),
+            MessageHandler(filters.Regex("^(📢 Send SMS)$"), start_broadcast),
             CallbackQueryHandler(project_action_callback, pattern="^(fe_|p_)"),
             CallbackQueryHandler(admin_settings_edit_callback, pattern="^edit_setting_"),
             CallbackQueryHandler(admin_user_action_callback, pattern="^uact_")
@@ -1692,6 +1688,7 @@ if __name__ == '__main__':
             MessageHandler(filters.Regex("^(❌ Cancel|Cancel|❌ বাতিল করুন|বাতিল করুন)$"), cancel_flow),
             CallbackQueryHandler(cancel_flow, pattern="^cancel_flow$")
         ],
+        allow_reentry=True,
         per_message=False
     )
 
