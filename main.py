@@ -1624,7 +1624,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"👥 মোট রেফারেল: {u_data['ref_count']}\n"
             f"🎁 রেফারেল ইনকাম: {u_data['ref_credit']} coins"
         )
-        await update.message.reply_text(profile_text, parse_mode="Markdown")
+        await update.message.reply_text(profile_text)
 
     elif text == "🛠️ Settings":
         await show_my_projects(update.message, str_id)
