@@ -144,7 +144,8 @@ def init_db():
         "coin_rate": "4.8",        # Coin rate for reacts (1 react = 4.8 coins, 1000 = 4800)
         "view_coin_rate": "4.8",   # Coin rate for views (1 view = 4.8 coins, 1000 = 4800)
         "dollar_rate": "1000",     # $1 = 1000 coins
-        "referral_bonus": "100"    # 100 coins per referral
+        "referral_bonus": "100",   # 100 coins per referral
+        "welcome_bonus": "500"     # Welcome bonus for new users
     }
     for k, v in defaults.items():
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v))
@@ -178,16 +179,17 @@ def db_get_user(user_id, username_val=""):
     
     if not row:
         default_projects = json.dumps([])
+        welcome_coins = int(db_get_setting("welcome_bonus", "500"))
         cursor.execute(
             "INSERT INTO users (user_id, username, credit, ref_count, ref_credit, projects, is_blocked) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (str_id, username_val, 500, 0, 0, default_projects, 0)
+            (str_id, username_val, welcome_coins, 0, 0, default_projects, 0)
         )
         conn.commit()
         conn.close()
         return {
             "user_id": str_id,
             "username": username_val,
-            "credit": 500,
+            "credit": welcome_coins,
             "ref_count": 0,
             "ref_credit": 0,
             "projects": [],
@@ -1391,7 +1393,8 @@ async def admin_settings_edit_callback(update: Update, context: ContextTypes.DEF
             "coin_rate": "💡 **নতুন Reaction Coin Rate লিখুন:**\n(যেমন: `4.8` মানে ১টি রিয়েকশন = ৪.৮ কয়েন)",
             "view_coin_rate": "👁️ **নতুন View Coin Rate লিখুন:**\n(যেমন: `4.8` মানে ১টি ভিউ = ৪.৮ কয়েন)",
             "dollar_rate": "💵 **নতুন Dollar Rate ($1 = ? Coins) লিখুন:**\n(যেমন: `1000` মানে $1 = 1000 Coins)",
-            "referral_bonus": "👥 **রেফারেল বোনাসের নতুন Coins সংখ্যা লিখুন:**\n(যেমন: `100`, `200`)"
+            "referral_bonus": "👥 **রেফারেল বোনাসের নতুন Coins সংখ্যা লিখুন:**\n(যেমন: `100`, `200`)",
+            "welcome_bonus": "🎁 **নতুন ইউজারের জন্য Welcome Bonus (Coins) সংখ্যা লিখুন:**\n(যেমন: `500`, `1000`)"
         }
         await query.message.reply_text(prompts.get(key, "✍️ নতুন মান লিখে পাঠান:"), reply_markup=cancel_keyboard())
         return STEP_ADMIN_EDIT_SETTING
@@ -1501,14 +1504,17 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
         curr_rate = db_get_setting("coin_rate", "4.8")
         curr_view_rate = db_get_setting("view_coin_rate", "4.8")
         curr_dollar = db_get_setting("dollar_rate", "1000")
+        curr_welcome = db_get_setting("welcome_bonus", "500")
         
         kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✏️ Edit Welcome Bonus", callback_data="edit_setting_welcome_bonus")],
             [InlineKeyboardButton("✏️ Edit Reaction Coin Rate", callback_data="edit_setting_coin_rate")],
             [InlineKeyboardButton("✏️ Edit View Coin Rate", callback_data="edit_setting_view_coin_rate")],
             [InlineKeyboardButton("✏️ Edit Dollar Rate ($1 = ? Coins)", callback_data="edit_setting_dollar_rate")]
         ])
         return await query.message.reply_text(
             f"💡 **কয়েন রেট সেটিংস:**\n───────────────────\n"
+            f"🎁 Welcome Bonus: **{curr_welcome} Coins**\n"
             f"📌 প্রতি রিয়্যাকশনে কয়েন: **{curr_rate} Coins**\n"
             f"👁️ প্রতি ভিউয়ে কয়েন: **{curr_view_rate} Coins**\n"
             f"💵 ডলারে কয়েন রেট: **$1 = {curr_dollar} Coins**\n\n"
