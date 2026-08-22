@@ -1663,7 +1663,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif text == "👥 Refer & Earn":
-        ref_link = f"https://t.me/{BOT_USERNAME.lstrip('@')}?start={str_id}"
+        ref_link = f"https://t.me/Sahadot_reaction123_bot?start={str_id}"
         ref_bonus = db_get_setting("referral_bonus", "100")
         await update.message.reply_text(
             f"👥 **রেফার এবং ইনকাম প্রোগ্রাম**\n───────────────────\n"
