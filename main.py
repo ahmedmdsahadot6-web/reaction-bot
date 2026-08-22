@@ -49,7 +49,7 @@ def keep_alive():
 
 # 🔑 Configuration
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8976277256:AAFmnjs1mR_BQXm5Inwtki-M-RmO0O2P6Fc")
-BOT_USERNAME = "FastAutoReact_bot"
+BOT_USERNAME = "@FastAutoReact_bot"
 ADMIN_IDS = [8454401183, 7871224176]
 ADMIN_USERNAME = "@SOYABUR_AS_LEADER"
 
