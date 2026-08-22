@@ -882,7 +882,7 @@ async def topup_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
         except Exception as e:
             logger.error(f"Failed to notify user for rejected topup: {e}")
 
-# 🛠️ Project Action Callback
+# 🛠️ Project Action Callback (FIXED FOR SAVE AND EDIT SETTINGS)
 async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -926,6 +926,7 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
                 reply_markup=InlineKeyboardMarkup(kb),
                 parse_mode="Markdown"
             )
+            return STEP_EDIT_FIELD
 
     elif data.startswith("fe_"):
         parts = data.split("_")
@@ -944,6 +945,7 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
 
     elif data == "p_back":
         await show_my_projects(query.message, user_id)
+        return ConversationHandler.END
 
 async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     val_txt = update.message.text.strip()
@@ -1553,7 +1555,7 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
         name = option_names.get(data, "Option")
         return await query.message.reply_text(f"⚙️ **{name}** অপশনটি সিলেক্ট করা হয়েছে।", parse_mode="Markdown")
 
-# Menu Handlers
+# Menu Handlers (FIXED: USERS REPORT HANDLED PROPERLY)
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     str_id = str(user_id)
@@ -1596,8 +1598,12 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=admin_dash_inline_kb
             )
 
-        elif text == "👥 Users Report":
+        elif text in ["👥 Users Report", "Users Report"]:
             all_u = db_get_all_users()
+            if not all_u:
+                await update.message.reply_text("👥 কোনো ইউজার ডাটাবেজে পাওয়া যায়নি।", reply_markup=get_admin_keyboard())
+                return
+
             u_list = "👥 **ইউজার রিপোর্ট:**\n───────────────────\n\n"
             for uid, uinfo in all_u.items():
                 uname = f"@{uinfo['username']}" if uinfo.get('username') else "N/A"
@@ -1691,6 +1697,7 @@ if __name__ == '__main__':
             STEP_INPUT_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_channel)],
             STEP_INPUT_VIEWS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_views)],
             STEP_INPUT_REACTS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_reacts)],
+            STEP_EDIT_FIELD: [CallbackQueryHandler(project_action_callback, pattern="^fe_")],
             STEP_EDIT_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_value)],
             STEP_ADMIN_SEARCH_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_search_user)],
             STEP_ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_broadcast)],
