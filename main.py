@@ -48,8 +48,8 @@ def keep_alive():
     t_ping.start()
 
 # 🔑 Configuration (FIXED: BOT_USERNAME removed '@' for proper URL routing)
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8818577041:AAEjinuvspPn8L4-1Cvp3jttYo3YYt7w7Nc")
-BOT_USERNAME = "@ai023bot"
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw")
+BOT_USERNAME = "@Sahadot_reaction123_bot"
 ADMIN_IDS = [8454401183, 7871224176]
 ADMIN_USERNAME = "@SOYABUR_AS_LEADER"
 
@@ -882,7 +882,7 @@ async def topup_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
         except Exception as e:
             logger.error(f"Failed to notify user for rejected topup: {e}")
 
-# 🛠️ Project Action Callback (FIXED FOR SAVE AND EDIT SETTINGS)
+# 🛠️ Project Action Callback
 async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -926,7 +926,6 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
                 reply_markup=InlineKeyboardMarkup(kb),
                 parse_mode="Markdown"
             )
-            return STEP_EDIT_FIELD
 
     elif data.startswith("fe_"):
         parts = data.split("_")
@@ -945,7 +944,6 @@ async def project_action_callback(update: Update, context: ContextTypes.DEFAULT_
 
     elif data == "p_back":
         await show_my_projects(query.message, user_id)
-        return ConversationHandler.END
 
 async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     val_txt = update.message.text.strip()
@@ -1555,7 +1553,7 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
         name = option_names.get(data, "Option")
         return await query.message.reply_text(f"⚙️ **{name}** অপশনটি সিলেক্ট করা হয়েছে।", parse_mode="Markdown")
 
-# Menu Handlers (FIXED: USERS REPORT HANDLED PROPERLY)
+# Menu Handlers
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     str_id = str(user_id)
@@ -1598,10 +1596,10 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=admin_dash_inline_kb
             )
 
-        elif text in ["👥 Users Report", "Users Report"]:
+        elif text == "👥 Users Report":
             all_u = db_get_all_users()
             if not all_u:
-                await update.message.reply_text("👥 কোনো ইউজার ডাটাবেজে পাওয়া যায়নি।", reply_markup=get_admin_keyboard())
+                await update.message.reply_text("👥 **ইউজার রিপোর্ট:**\n───────────────────\n❌ কোনো ইউজার পাওয়া যায়নি।", parse_mode="Markdown", reply_markup=get_admin_keyboard())
                 return
 
             u_list = "👥 **ইউজার রিপোর্ট:**\n───────────────────\n\n"
@@ -1697,7 +1695,6 @@ if __name__ == '__main__':
             STEP_INPUT_CHANNEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_channel)],
             STEP_INPUT_VIEWS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_views)],
             STEP_INPUT_REACTS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_input_reacts)],
-            STEP_EDIT_FIELD: [CallbackQueryHandler(project_action_callback, pattern="^fe_")],
             STEP_EDIT_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_value)],
             STEP_ADMIN_SEARCH_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_search_user)],
             STEP_ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_broadcast)],
