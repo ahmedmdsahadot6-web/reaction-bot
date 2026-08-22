@@ -49,7 +49,7 @@ def keep_alive():
 
 # 🔑 Configuration (FIXED: BOT_USERNAME removed '@' for proper URL routing)
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw")
-BOT_USERNAME = "Sahadot_reaction123_bot"
+BOT_USERNAME = "@Sahadot_reaction123_bot"
 ADMIN_IDS = [8454401183, 7871224176]
 ADMIN_USERNAME = "@SOYABUR_AS_LEADER"
 
@@ -1663,7 +1663,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif text == "👥 Refer & Earn":
-        ref_link = f"https://t.me/{BOT_USERNAME}?start={str_id}"
+        ref_link = f"https://t.me/{BOT_USERNAME.lstrip("@")}?start={str_id}"
         ref_bonus = db_get_setting("referral_bonus", "100")
         await update.message.reply_text(
             f"👥 **রেফার এবং ইনকাম প্রোগ্রাম**\n───────────────────\n"
