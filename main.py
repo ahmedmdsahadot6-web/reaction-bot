@@ -1537,7 +1537,7 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
         return await query.message.reply_text(
             f"👥 **রেফারেল সেটিংস:**\n───────────────────\n"
             f"বর্তমান বোনাস: **প্রতি রেফারে {curr_ref} কয়েন**\n\n"
-            f"রেফারেল বোনাস কয়েন পরিবর্তন করতে নিচের বাটনে ক্লিক করুন।", 
+            f"রেফারেল বোনাস কয়েন পরিবর্তন করতে নিচের বাটনে ক্লিক করুন។", 
             parse_mode="Markdown",
             reply_markup=kb
         )
