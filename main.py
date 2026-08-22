@@ -47,7 +47,7 @@ def keep_alive():
     t_ping.daemon = True
     t_ping.start()
 
-# 🔑 Configuration (FIXED: BOT_USERNAME removed '@' for proper URL routing)
+# 🔑 Configuration
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw")
 BOT_USERNAME = "Sahadot_reaction123_bot"
 ADMIN_IDS = [8454401183, 7871224176]
@@ -1420,8 +1420,6 @@ async def process_admin_edit_setting(update: Update, context: ContextTypes.DEFAU
     db_set_setting(key, txt)
     context.user_data.pop('admin_edit_key', None)
 
-    # Confirmation is sent without Markdown parsing so the saved-value
-    # message is not lost because of formatting/parsing errors.
     await update.message.reply_text(
         f"🎉 {key.upper()} সফলভাবে আপডেট করা হয়েছে: {txt}",
         reply_markup=get_admin_keyboard()
@@ -1616,7 +1614,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 spent_coins = db_get_user_spent_coins(uid)
 
-                # Escape underscores to prevent Markdown parsing errors
                 safe_uname = uname.replace('_', '\\_')
                 safe_ch_names = ch_names.replace('_', '\\_')
 
@@ -1663,7 +1660,8 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif text == "👥 Refer & Earn":
-        ref_link = f"https://t.me/Sahadot_reaction123_bot?start={str_id}"
+        # Bot username dynamically connected from the configuration variable
+        ref_link = f"https://t.me/{BOT_USERNAME}?start={str_id}"
         ref_bonus = db_get_setting("referral_bonus", "100")
         await update.message.reply_text(
             f"👥 **রেফার এবং ইনকাম প্রোগ্রাম**\n───────────────────\n"
