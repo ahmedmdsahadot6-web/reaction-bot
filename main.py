@@ -1602,10 +1602,11 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("👥 **ইউজার রিপোর্ট:**\n───────────────────\n❌ কোনো ইউজার পাওয়া যায়নি।", parse_mode="Markdown", reply_markup=get_admin_keyboard())
                 return
 
-            current_chunk = "👥 **ইউজার রিপোর্ট:**\n───────────────────\n\n"
+            header = "👥 **ইউজার রিপোর্ট:**\n───────────────────\n\n"
+            current_chunk = header
             
             for uid, uinfo in all_u.items():
-                uname = f"@{uinfo['username']}" if uinfo.get('username') else "N/A"
+                uname = f"@{uinfo['username']}" if uinfo.get('username') else "None"
                 projects = uinfo.get('projects', [])
                 if projects:
                     ch_names = ", ".join([p.get('channel_name', 'Channel') for p in projects])
@@ -1617,9 +1618,8 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 item_text = (
                     f"👤 **Username:** {uname}\n"
                     f"🆔 **ID:** `{uid}`\n"
-                    f"📢 **Channel:** {ch_names}\n"
-                    f"💰 **Coins:** {uinfo.get('credit', 0)} | 💸 **Spent:** {spent_coins}\n"
-                    f"───────────────\n"
+                    f"📢 **Channel:** **{ch_names}**\n"
+                    f"💰 **Coins:** {uinfo.get('credit', 0)} | 💸 **Spent:** {spent_coins}\n\n"
                 )
 
                 if len(current_chunk) + len(item_text) > 3800:
