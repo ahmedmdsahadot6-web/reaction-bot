@@ -1598,38 +1598,38 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif text == "👥 Users Report":
             all_u = db_get_all_users()
-            if not all_u:
-                await update.message.reply_text("👥 **ইউজার রিপোর্ট:**\n───────────────────\n❌ কোনো ইউজার পাওয়া যায়নি।", parse_mode="Markdown", reply_markup=get_admin_keyboard())
-                return
-
-            header = "👥 **ইউজার রিপোর্ট:**\n───────────────────\n\n"
-            current_chunk = header
-            
+            u_list = "👥 **ইউজার রিপোর্ট:**\n───────────────────\n\n"
             for uid, uinfo in all_u.items():
                 uname = f"@{uinfo['username']}" if uinfo.get('username') else "None"
+                
                 projects = uinfo.get('projects', [])
                 if projects:
-                    ch_names = ", ".join([p.get('channel_name', 'Channel') for p in projects])
+                    channel_parts = []
+                    for p in projects:
+                        ch_uname = p.get('username')
+                        if ch_uname:
+                            channel_parts.append(f"**FORTUNATA COMMUNITY💯❤️**")
+                        else:
+                            channel_parts.append(p.get('channel_name', 'None'))
+                    ch_names = ", ".join(channel_parts)
                 else:
                     ch_names = "None"
                 
                 spent_coins = db_get_user_spent_coins(uid)
 
-                item_text = (
+                u_list += (
                     f"👤 **Username:** {uname}\n"
                     f"🆔 **ID:** `{uid}`\n"
-                    f"📢 **Channel:** **{ch_names}**\n"
-                    f"💰 **Coins:** {uinfo.get('credit', 0)} | 💸 **Spent:** {spent_coins}\n\n"
+                    f"📢 **Channel:** {ch_names}\n"
+                    f"💰 **Coins:** {uinfo.get('credit', 0)} | 💸 **Spent:** {spent_coins}\n"
+                    f"───────────────────\n\n"
                 )
-
-                if len(current_chunk) + len(item_text) > 3800:
-                    await update.message.reply_text(current_chunk, parse_mode="Markdown")
-                    current_chunk = item_text
-                else:
-                    current_chunk += item_text
-
-            if current_chunk:
-                await update.message.reply_text(current_chunk, parse_mode="Markdown", reply_markup=get_admin_keyboard())
+            
+            if len(u_list) > 4000:
+                for chunk in [u_list[i:i+4000] for i in range(0, len(u_list), 4000)]:
+                    await update.message.reply_text(chunk, parse_mode="Markdown", reply_markup=get_admin_keyboard())
+            else:
+                await update.message.reply_text(u_list, parse_mode="Markdown", reply_markup=get_admin_keyboard())
             return
 
         elif text == "🏠 Main Menu":
