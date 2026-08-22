@@ -1600,18 +1600,10 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             all_u = db_get_all_users()
             u_list = "👥 **ইউজার রিপোর্ট:**\n───────────────────\n\n"
             for uid, uinfo in all_u.items():
-                uname = f"@{uinfo['username']}" if uinfo.get('username') else "None"
-                
+                uname = f"@{uinfo['username']}" if uinfo.get('username') else "N/A"
                 projects = uinfo.get('projects', [])
                 if projects:
-                    channel_parts = []
-                    for p in projects:
-                        ch_uname = p.get('username')
-                        if ch_uname:
-                            channel_parts.append(f"**FORTUNATA COMMUNITY💯❤️**")
-                        else:
-                            channel_parts.append(p.get('channel_name', 'None'))
-                    ch_names = ", ".join(channel_parts)
+                    ch_names = ", ".join([p.get('channel_name', 'Channel') for p in projects])
                 else:
                     ch_names = "None"
                 
@@ -1622,7 +1614,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"🆔 **ID:** `{uid}`\n"
                     f"📢 **Channel:** {ch_names}\n"
                     f"💰 **Coins:** {uinfo.get('credit', 0)} | 💸 **Spent:** {spent_coins}\n"
-                    f"───────────────────\n\n"
+                    f"───────────────\n"
                 )
             
             if len(u_list) > 4000:
