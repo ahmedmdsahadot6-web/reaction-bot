@@ -47,7 +47,7 @@ def keep_alive():
     t_ping.daemon = True
     t_ping.start()
 
-# 🔑 Configuration
+# 🔑 Configuration (FIXED: BOT_USERNAME removed '@' for proper URL routing)
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw")
 BOT_USERNAME = "@Sahadot_reaction123_bot"
 ADMIN_IDS = [8454401183, 7871224176]
@@ -59,7 +59,7 @@ LOG_CHANNEL = "@orderchannelsuperfast"
 # 🌐 Default SMM Panel Config
 SMM_API_URL = "https://1xpanel.com/api/v2"
 
-# 🐘 PostgreSQL Database URL
+# 🐘 PostgreSQL Database URL (Neon DB)
 DATABASE_URL = os.environ.get(
     "DATABASE_URL", 
     "postgresql://neondb_owner:npg_7WGChNEH6Blu@ep-polished-hill-axcjt3ch.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require"
@@ -1553,50 +1553,6 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
         name = option_names.get(data, "Option")
         return await query.message.reply_text(f"⚙️ **{name}** অপশনটি সিলেক্ট করা হয়েছে।", parse_mode="Markdown")
 
-# Direct Users Report Handler (Fixed & Optimized Chunking)
-async def admin_users_report_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id not in ADMIN_IDS:
-        return
-
-    all_u = db_get_all_users()
-    if not all_u:
-        await update.message.reply_text("👥 **ইউজার রিপোর্ট:**\n───────────────────\n❌ কোনো ইউজার পাওয়া যায়নি।", parse_mode="Markdown", reply_markup=get_admin_keyboard())
-        return
-
-    chunks = []
-    current_chunk = "👥 **ইউজার রিপোর্ট:**\n───────────────────\n\n"
-
-    for uid, uinfo in all_u.items():
-        uname = f"@{uinfo['username']}" if uinfo.get('username') else "N/A"
-        projects = uinfo.get('projects', [])
-        if projects:
-            ch_names = ", ".join([p.get('channel_name', 'Channel') for p in projects])
-        else:
-            ch_names = "None"
-        
-        spent_coins = db_get_user_spent_coins(uid)
-
-        entry = (
-            f"👤 **Username:** {uname}\n"
-            f"🆔 **ID:** `{uid}`\n"
-            f"📢 **Channel:** {ch_names}\n"
-            f"💰 **Coins:** {uinfo.get('credit', 0)} | 💸 **Spent:** {spent_coins}\n"
-            f"───────────────\n"
-        )
-
-        if len(current_chunk) + len(entry) > 3500:
-            chunks.append(current_chunk)
-            current_chunk = entry
-        else:
-            current_chunk += entry
-
-    if current_chunk:
-        chunks.append(current_chunk)
-
-    for chunk in chunks:
-        await update.message.reply_text(chunk, parse_mode="Markdown", reply_markup=get_admin_keyboard())
-
 # Menu Handlers
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -1639,6 +1595,42 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown",
                 reply_markup=admin_dash_inline_kb
             )
+
+        elif text == "👥 Users Report":
+            all_u = db_get_all_users()
+            if not all_u:
+                await update.message.reply_text("👥 **ইউজার রিপোর্ট:**\n───────────────────\n❌ কোনো ইউজার পাওয়া যায়নি।", parse_mode="Markdown", reply_markup=get_admin_keyboard())
+                return
+
+            current_chunk = "👥 **ইউজার রিপোর্ট:**\n───────────────────\n\n"
+            
+            for uid, uinfo in all_u.items():
+                uname = f"@{uinfo['username']}" if uinfo.get('username') else "N/A"
+                projects = uinfo.get('projects', [])
+                if projects:
+                    ch_names = ", ".join([p.get('channel_name', 'Channel') for p in projects])
+                else:
+                    ch_names = "None"
+                
+                spent_coins = db_get_user_spent_coins(uid)
+
+                item_text = (
+                    f"👤 **Username:** {uname}\n"
+                    f"🆔 **ID:** `{uid}`\n"
+                    f"📢 **Channel:** {ch_names}\n"
+                    f"💰 **Coins:** {uinfo.get('credit', 0)} | 💸 **Spent:** {spent_coins}\n"
+                    f"───────────────\n"
+                )
+
+                if len(current_chunk) + len(item_text) > 3800:
+                    await update.message.reply_text(current_chunk, parse_mode="Markdown")
+                    current_chunk = item_text
+                else:
+                    current_chunk += item_text
+
+            if current_chunk:
+                await update.message.reply_text(current_chunk, parse_mode="Markdown", reply_markup=get_admin_keyboard())
+            return
 
         elif text == "🏠 Main Menu":
             return await update.message.reply_text("🏠 মেইন মেনু:", reply_markup=get_user_keyboard())
@@ -1736,11 +1728,6 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(admin_dashboard_inline_callback, pattern="^dash_"))
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
-    
-    # Separate High-Priority Handler for Users Report
-    app.add_handler(MessageHandler(filters.Regex("^(👥 Users Report)$"), admin_users_report_handler))
-    
-    # Fallback Menu Handler
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
 
     logger.info("🤖 Reaction SMM Engine Active...")
