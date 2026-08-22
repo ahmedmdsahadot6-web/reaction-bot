@@ -3,7 +3,6 @@ import os
 import json
 import re
 import asyncio
-import html
 import psycopg2
 import psycopg2.extras
 import requests
@@ -48,14 +47,14 @@ def keep_alive():
     t_ping.daemon = True
     t_ping.start()
 
-# 🔑 Configuration (Placeholder credentials using environment variables)
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
-BOT_USERNAME = os.environ.get("BOT_USERNAME", "YourBotUsername")
-ADMIN_IDS = [int(x) for x in os.environ.get("ADMIN_IDS", "8454401183,7871224176").split(",")]
-ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "@SOYABUR_AS_LEADER")
+# 🔑 Configuration (FIXED: BOT_USERNAME removed '@' for proper URL routing)
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw")
+BOT_USERNAME = "@Sahadot_reaction123_bot"
+ADMIN_IDS = [8454401183, 7871224176]
+ADMIN_USERNAME = "@SOYABUR_AS_LEADER"
 
 # 📢 Order Logs Channel
-LOG_CHANNEL = os.environ.get("LOG_CHANNEL", "@orderchannelsuperfast")
+LOG_CHANNEL = "@orderchannelsuperfast"
 
 # 🌐 Default SMM Panel Config
 SMM_API_URL = "https://1xpanel.com/api/v2"
@@ -63,7 +62,7 @@ SMM_API_URL = "https://1xpanel.com/api/v2"
 # 🐘 PostgreSQL Database URL (Neon DB)
 DATABASE_URL = os.environ.get(
     "DATABASE_URL", 
-    "postgresql://username:password@host/database?sslmode=require"
+    "postgresql://neondb_owner:npg_7WGChNEH6Blu@ep-polished-hill-axcjt3ch.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require"
 )
 
 def get_db():
@@ -129,7 +128,7 @@ def init_db():
     ''')
     
     defaults = {
-        "smm_api_key": "YOUR_SMM_API_KEY_HERE",
+        "smm_api_key": "792d092f1f7fdcebcb9233107b2f1f33",
         "smm_service_id": "1936",
         "smm_view_service_id": "7294",
         "coin_rate": "4.8",
@@ -274,28 +273,6 @@ def db_get_user_spent_coins(user_id):
             
     return total_spent
 
-# Optimized SQL Aggregation for Users Report
-def db_get_all_users_with_spent_aggregated():
-    conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    
-    react_rate = float(db_get_setting("coin_rate", "4.8"))
-    view_rate = float(db_get_setting("view_coin_rate", "4.8"))
-    
-    query = """
-        SELECT u.user_id, u.username, u.credit, u.projects, u.is_blocked,
-               COALESCE(SUM(CASE WHEN o.order_type = 'Views' THEN o.count * %s ELSE o.count * %s END), 0) as total_spent
-        FROM users u
-        LEFT JOIN orders o ON u.user_id = o.user_id
-        GROUP BY u.user_id, u.username, u.credit, u.projects, u.is_blocked
-        ORDER BY u.user_id ASC
-    """
-    cursor.execute(query, (view_rate, react_rate))
-    rows = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return rows
-
 def db_get_user_orders_count(user_id):
     conn = get_db()
     cursor = conn.cursor()
@@ -396,7 +373,7 @@ def db_update_topup_status(req_id, status):
 
 # 🛒 SMM Order Submit Function
 def send_smm_order(link, quantity, service_id_override=None):
-    api_key = db_get_setting("smm_api_key", "YOUR_SMM_API_KEY_HERE")
+    api_key = db_get_setting("smm_api_key", "792d092f1f7fdcebcb9233107b2f1f33")
     service_id = service_id_override if service_id_override else db_get_setting("smm_service_id", "1936")
     
     payload = {
@@ -417,7 +394,7 @@ def send_smm_order(link, quantity, service_id_override=None):
 
 # 💳 SMM Panel Balance Check Function
 def get_smm_balance():
-    api_key = db_get_setting("smm_api_key", "YOUR_SMM_API_KEY_HERE")
+    api_key = db_get_setting("smm_api_key", "792d092f1f7fdcebcb9233107b2f1f33")
     payload = {
         'key': api_key,
         'action': 'balance'
@@ -505,121 +482,6 @@ async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"───────────────────"
     )
     await update.message.reply_text(text, reply_markup=get_admin_keyboard(), parse_mode="Markdown")
-
-# ==========================================
-# 👥 Dedicated Users Report Handler & Pagination
-# ==========================================
-async def show_users_report(update_obj, context: ContextTypes.DEFAULT_TYPE, page: int = 1, is_callback: bool = False):
-    user_id = update_obj.effective_user.id
-    if user_id not in ADMIN_IDS:
-        if is_callback:
-            await update_obj.callback_query.answer("❌ আপনি অ্যাডমিন নন!", show_alert=True)
-        else:
-            await update_obj.message.reply_text("❌ আপনি অ্যাডমিন নন!")
-        return
-
-    rows = db_get_all_users_with_spent_aggregated()
-    total_users = len(rows)
-    
-    if total_users == 0:
-        msg = "👥 **Users Report**\n───────────────────\n❌ কোনো ইউজার ডাটাবেজে পাওয়া যায়নি।"
-        if is_callback:
-            await update_obj.callback_query.edit_message_text(msg, parse_mode="HTML")
-        else:
-            await update_obj.message.reply_text(msg, parse_mode="HTML", reply_markup=get_admin_keyboard())
-        return
-
-    per_page = 5
-    total_pages = (total_users + per_page - 1) // per_page
-    if page < 1:
-        page = 1
-    elif page > total_pages:
-        page = total_pages
-
-    start_idx = (page - 1) * per_page
-    end_idx = start_idx + per_page
-    current_rows = rows[start_idx:end_idx]
-
-    report_text = "👥 <b>Users Report</b>\n"
-    for r in current_rows:
-        uid = r['user_id']
-        uname_raw = r['username']
-        username = f"@{uname_raw}" if uname_raw else "N/A"
-        coins = r['credit']
-        spent = r['total_spent']
-        is_blocked = r['is_blocked']
-        status = "Banned 🔴" if is_blocked == 1 else "Active 🟢"
-
-        projects = json.loads(r['projects']) if r['projects'] else []
-        if projects:
-            channel_name = projects[0].get('channel_name', 'FORTUNATA COMMUNITY')
-        else:
-            channel_name = "None"
-
-        # Safe escaping using html.escape to prevent formatting crashes
-        safe_username = html.escape(username)
-        safe_channel = html.escape(channel_name)
-
-        report_text += (
-            "━━━━━━━━━━━━━━━━━━\n"
-            f"👤 Username: {safe_username}\n"
-            f"🆔 ID: <code>{uid}</code>\n"
-            f"📢 Channel: {safe_channel}\n"
-            f"💰 Coins: {coins}\n"
-            f"💸 Spent: {spent}\n"
-            f"⚡ Status: {status}\n"
-        )
-    report_text += "━━━━━━━━━━━━━━━━━━"
-
-    # Pagination buttons logic
-    nav_buttons = []
-    if total_users > per_page:
-        row_btns = []
-        if page > 1:
-            row_btns.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"users_rep_{page-1}"))
-        
-        row_btns.append(InlineKeyboardButton(f"Page {page}/{total_pages}", callback_data="users_rep_noop"))
-        
-        if page < total_pages:
-            row_btns.append(InlineKeyboardButton("Next ➡️", callback_data=f"users_rep_{page+1}"))
-        nav_buttons.append(row_btns)
-
-    nav_buttons.append([
-        InlineKeyboardButton("🔄 Refresh", callback_data=f"users_rep_{page}"),
-        InlineKeyboardButton("🏠 Admin Panel", callback_data="users_rep_admin")
-    ])
-
-    markup = InlineKeyboardMarkup(nav_buttons)
-
-    if is_callback:
-        try:
-            await update_obj.callback_query.edit_message_text(report_text, parse_mode="HTML", reply_markup=markup)
-        except Exception:
-            pass
-    else:
-        await update_obj.message.reply_text(report_text, parse_mode="HTML", reply_markup=markup)
-
-async def users_report_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    if query.from_user.id not in ADMIN_IDS:
-        return
-
-    data = query.data
-    if data == "users_rep_noop":
-        return
-    elif data == "users_rep_admin":
-        await query.message.delete()
-        await query.message.reply_text("🏠 অ্যাডমিন প্যানেল:", reply_markup=get_admin_keyboard())
-        return
-    elif data.startswith("users_rep_"):
-        try:
-            page = int(data.split("_")[2])
-            await show_users_report(update, context, page=page, is_callback=True)
-        except Exception as e:
-            logger.error(f"Users report callback error: {e}")
-
-# ==========================================
 
 def build_setup_dashboard_markup_and_text(context: ContextTypes.DEFAULT_TYPE):
     draft = context.user_data.get('draft_project', {})
@@ -1581,7 +1443,7 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
         return await query.message.reply_text(res_text)
 
     elif data == "dash_api_orders":
-        curr_key = db_get_setting("smm_api_key", "YOUR_SMM_API_KEY_HERE")
+        curr_key = db_get_setting("smm_api_key", "792d092f1f7fdcebcb9233107b2f1f33")
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("✏️ Edit API Key", callback_data="edit_setting_smm_api_key")]])
         return await query.message.reply_text(f"🌐 **SMM Panel API Key:**\n\n`{curr_key}`", parse_mode="Markdown", reply_markup=kb)
 
@@ -1735,7 +1597,34 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
         elif text == "👥 Users Report":
-            return await show_users_report(update, context, page=1, is_callback=False)
+            all_u = db_get_all_users()
+            u_list = "👥 **ইউজার রিপোর্ট:**\n───────────────────\n\n"
+            for uid, uinfo in all_u.items():
+                raw_uname = uinfo.get('username') or ""
+                uname = f"@{raw_uname}" if raw_uname else "N/A"
+                projects = uinfo.get('projects', [])
+                if projects:
+                    ch_names = ", ".join([p.get('channel_name', 'Channel') for p in projects])
+                else:
+                    ch_names = "None"
+                
+                spent_coins = db_get_user_spent_coins(uid)
+
+                # Escape underscores to prevent Markdown parsing errors
+                safe_uname = uname.replace('_', '\\_')
+                safe_ch_names = ch_names.replace('_', '\\_')
+
+                u_list += (
+                    f"👤 Username: {safe_uname} 🆔 ID: `{uid}` 📢 Channel: {safe_ch_names} 💰 Coins: {uinfo.get('credit', 0)} | 💸 Spent: {spent_coins} "
+                    f"───────────────────\n"
+                )
+            
+            if len(u_list) > 4000:
+                for chunk in [u_list[i:i+4000] for i in range(0, len(u_list), 4000)]:
+                    await update.message.reply_text(chunk, parse_mode="Markdown", reply_markup=get_admin_keyboard())
+            else:
+                await update.message.reply_text(u_list, parse_mode="Markdown", reply_markup=get_admin_keyboard())
+            return
 
         elif text == "🏠 Main Menu":
             return await update.message.reply_text("🏠 মেইন মেনু:", reply_markup=get_user_keyboard())
@@ -1831,7 +1720,6 @@ if __name__ == '__main__':
     app.add_handler(conv_handler)
     app.add_handler(CallbackQueryHandler(topup_action_callback, pattern="^topup_"))
     app.add_handler(CallbackQueryHandler(admin_dashboard_inline_callback, pattern="^dash_"))
-    app.add_handler(CallbackQueryHandler(users_report_callback_handler, pattern="^users_rep_"))
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
