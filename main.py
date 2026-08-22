@@ -22,7 +22,7 @@ web_app = Flask('')
 
 @web_app.route('/')
 def home():
-    return "Telegram Auto Reaction SMM Engine: ACTIVE 24/7"[cite: 1]
+    return "Telegram Auto Reaction SMM Engine: ACTIVE 24/7"
 
 def ping_self():
     render_url = os.environ.get("RENDER_EXTERNAL_URL", "https://reaction-bot-7d1u.onrender.com")
@@ -47,7 +47,7 @@ def keep_alive():
     t_ping.daemon = True
     t_ping.start()
 
-# 🔑 Configuration (FIXED: BOT_USERNAME removed '@' for proper URL routing)
+# 🔑 Configuration
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw")
 BOT_USERNAME = "@Sahadot_reaction123_bot"
 ADMIN_IDS = [8454401183, 7871224176]
@@ -1420,7 +1420,6 @@ async def process_admin_edit_setting(update: Update, context: ContextTypes.DEFAU
     db_set_setting(key, txt)
     context.user_data.pop('admin_edit_key', None)
     
-    # সফলভাবে আপডেট হওয়ার পর নিশ্চিত মেসেজ পাঠানো হচ্ছে
     await update.message.reply_text(
         f"🎉 **সফলভাবে সেভ হয়েছে!**\n\n{key.upper()} আপডেট করে নতুন মান দেওয়া হয়েছে: `{txt}`", 
         parse_mode="Markdown", 
