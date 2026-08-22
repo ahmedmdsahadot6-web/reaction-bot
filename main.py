@@ -47,7 +47,7 @@ def keep_alive():
     t_ping.daemon = True
     t_ping.start()
 
-# 🔑 Configuration (FIXED: BOT_USERNAME removed '@' for proper URL routing)
+# 🔑 Configuration
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw")
 BOT_USERNAME = "@Sahadot_reaction123_bot"
 ADMIN_IDS = [8454401183, 7871224176]
@@ -1241,7 +1241,7 @@ async def start_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def process_admin_search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = update.message.text.strip()
     if txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
-        await update.message.reply_text("অনুসন্ধান বাতিল করা হয়েছে আলী।", reply_markup=get_admin_keyboard())
+        await update.message.reply_text("অনুসন্ধান বাতিল করা হয়েছে।", reply_markup=get_admin_keyboard())
         return ConversationHandler.END
 
     u_data = db_get_user(txt)
@@ -1610,7 +1610,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 spent_coins = db_get_user_spent_coins(uid)
 
-                # Escape underscores to prevent Markdown parsing errors
                 safe_uname = uname.replace('_', '\\_')
                 safe_ch_names = ch_names.replace('_', '\\_')
 
