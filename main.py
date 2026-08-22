@@ -49,7 +49,7 @@ def keep_alive():
 
 # 🔑 Configuration (FIXED: BOT_USERNAME removed '@' for proper URL routing)
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw")
-BOT_USERNAME = "@Sahadot_reaction123_bot"
+BOT_USERNAME = "Sahadot_reaction123_bot"
 ADMIN_IDS = [8454401183, 7871224176]
 ADMIN_USERNAME = "@SOYABUR_AS_LEADER"
 
