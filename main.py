@@ -1602,8 +1602,12 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif text == "👥 Users Report":
             all_u = db_get_all_users()
+            
+            # কয়েনের পরিমাণ অনুযায়ী বড় থেকে ছোট (Descending) সাজানো হচ্ছে
+            sorted_users = sorted(all_u.items(), key=lambda x: x[1].get('credit', 0), reverse=True)
+            
             u_list = "👥 **ইউজার রিপোর্ট:**\n───────────────────\n\n"
-            for uid, uinfo in all_u.items():
+            for uid, uinfo in sorted_users:
                 raw_uname = uinfo.get('username') or ""
                 uname = f"@{raw_uname}" if raw_uname else "N/A"
                 projects = uinfo.get('projects', [])
