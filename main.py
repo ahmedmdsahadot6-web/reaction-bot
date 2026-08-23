@@ -1622,11 +1622,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 safe_ch_names = ch_names.replace('_', '\\_')
 
                 u_list += (
-                    f"👤 Username: {safe_uname} 
-                    f"🆔 ID: `{uid}` 
-                    f"📢 Channel: {safe_ch_names} 
-                    f"💰 Coins: {uinfo.get('credit', 0)} 
-                    f"💸 Spent: {spent_coins} "
+                    f"👤 Username: {safe_uname} 🆔 ID: `{uid}` 📢 Channel: {safe_ch_names} 💰 Coins: {uinfo.get('credit', 0)} | 💸 Spent: {spent_coins} "
                     f"───────────────────\n"
                 )
             
