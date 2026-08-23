@@ -1684,17 +1684,16 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=inline_kb
         )
 
-    # সব ধরণের ইমোজি এবং স্পেস ভেরিয়েশন চেক করার জন্য কন্ডিশন আপডেট করা হয়েছে
-    elif "Refer & Earn" in text or "রেফার" in text:
-        bot_uname = context.bot.username if context.bot and context.bot.username else BOT_USERNAME.strip().lstrip('@')
-        clean_bot_uname = bot_uname.strip().lstrip('@')
+    elif text == "👥 Refer & Earn":
+        clean_bot_uname = BOT_USERNAME.strip().lstrip('@')
         ref_link = f"https://t.me/{clean_bot_uname}?start={str_id}"
         ref_bonus = db_get_setting("referral_bonus", "100")
         await update.message.reply_text(
             f"👥 **রেফার এবং ইনকাম প্রোগ্রাম**\n───────────────────\n"
             f"🔗 **আপনার রেফারেল লিংক:**\n{ref_link}\n\n"
             f"🎁 প্রতি সফল রেফারে {ref_bonus} ফ্রী কয়েন অর্জন করুন!",
-            parse_mode="Markdown"
+            parse_mode="Markdown",
+            disable_web_page_preview=True
         )
 
 if __name__ == '__main__':
