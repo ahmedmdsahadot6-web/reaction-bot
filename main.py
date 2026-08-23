@@ -434,24 +434,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     str_id = str(user.id)
     username = user.username or ""
 
+    # চেক করা যাক ইউজার ডাটাবেজে আগে থেকেই আছে কি না
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT credit, ref_count, ref_credit, projects, is_blocked, username FROM users WHERE user_id = %s", (str_id,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    is_new_user = (row is None)
+
     u_data = db_get_user(str_id, username_val=username)
 
     if u_data.get("is_blocked", 0) == 1:
         await update.message.reply_text("🚫 আপনাকে এই বটটি ব্যবহার করা থেকে ব্লক করা হয়েছে।")
         return
 
-    if context.args and len(context.args) > 0:
+    if is_new_user and context.args and len(context.args) > 0:
         referrer_id = context.args[0]
-        ref_data = db_get_user(referrer_id)
-        if referrer_id != str_id and ref_data:
-            conn = get_db()
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM users WHERE user_id = %s", (str_id,))
-            exists = cursor.fetchone()[0]
-            cursor.close()
-            conn.close()
-            
-            if exists <= 1 and u_data["ref_count"] == 0:
+        if referrer_id != str_id:
+            ref_data = db_get_user(referrer_id)
+            if ref_data:
                 ref_bonus = int(db_get_setting("referral_bonus", "100"))
                 ref_data["ref_count"] += 1
                 ref_data["credit"] += ref_bonus
@@ -1603,7 +1606,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif text == "👥 Users Report":
             all_u = db_get_all_users()
             
-            # অপ্টিমাইজেশনের জন্য সব ইউজারের স্পেন্ড করা কয়েন একবারে ডাটাবেজ থেকে নিয়ে আসা হচ্ছে
             conn = get_db()
             cursor = conn.cursor()
             cursor.execute("SELECT user_id, order_type, count FROM orders")
@@ -1686,9 +1688,8 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif text == "👥 Refer & Earn":
-        # বট ইউজারনেম রিয়েল ও সঠিক রাখার জন্য সরাসরি BOT_USERNAME ব্যবহার করা হয়েছে (বট ইউজারনেম `@` সহ অথবা ছাড়া যেমনটি কনফিগারেশনে থাকবে)
         clean_bot_uname = BOT_USERNAME.strip().lstrip('@')
-        ref_link = f"https://t.me/FastAutoReact_bot?start={str_id}"
+        ref_link = f"https://t.me/{clean_bot_uname}?start={str_id}"
         ref_bonus = db_get_setting("referral_bonus", "100")
         await update.message.reply_text(
             f"👥 **রেফার এবং ইনকাম প্রোগ্রাম**\n───────────────────\n"
