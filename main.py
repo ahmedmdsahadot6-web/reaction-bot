@@ -1603,7 +1603,26 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif text == "👥 Users Report":
             all_u = db_get_all_users()
             
-            # কয়েনের পরিমাণ অনুযায়ী বড় থেকে ছোট (Descending) সাজানো হচ্ছে
+            # অপ্টিমাইজেশনের জন্য সব ইউজারের স্পেন্ড করা কয়েন একবারে ডাটাবেজ থেকে নিয়ে আসা হচ্ছে
+            conn = get_db()
+            cursor = conn.cursor()
+            cursor.execute("SELECT user_id, order_type, count FROM orders")
+            all_orders_rows = cursor.fetchall()
+            cursor.close()
+            conn.close()
+
+            react_rate = float(db_get_setting("coin_rate", "4.8"))
+            view_rate = float(db_get_setting("view_coin_rate", "4.8"))
+
+            user_spent_map = {}
+            for o_uid, otype, count in all_orders_rows:
+                if o_uid not in user_spent_map:
+                    user_spent_map[o_uid] = 0
+                if otype == 'Views':
+                    user_spent_map[o_uid] += int(count * view_rate)
+                else:
+                    user_spent_map[o_uid] += int(count * react_rate)
+
             sorted_users = sorted(all_u.items(), key=lambda x: x[1].get('credit', 0), reverse=True)
             
             u_list = "👥 **ইউজার রিপোর্ট:**\n───────────────────\n\n"
@@ -1616,14 +1635,17 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     ch_names = "None"
                 
-                spent_coins = db_get_user_spent_coins(uid)
+                spent_coins = user_spent_map.get(uid, 0)
 
                 safe_uname = uname.replace('_', '\\_')
                 safe_ch_names = ch_names.replace('_', '\\_')
 
                 u_list += (
-                    f"👤 Username: {safe_uname} 🆔 ID: `{uid}` 📢 Channel: {safe_ch_names} 💰 Coins: {uinfo.get('credit', 0)} | 💸 Spent: {spent_coins} "
-                    f"───────────────────\n"
+                    f"👤 **Username:** {safe_uname}\n"
+                    f"🆔 **ID:** `{uid}`\n"
+                    f"📢 **Channel:** {safe_ch_names}\n"
+                    f"💰 **Coins:** {uinfo.get('credit', 0)} | 💸 **Spent:** {spent_coins}\n"
+                    f"───────────────\n"
                 )
             
             if len(u_list) > 4000:
@@ -1664,8 +1686,9 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif text == "👥 Refer & Earn":
-        # Bot username dynamically connected from the configuration variable
-        ref_link = f"https://t.me/{BOT_USERNAME}?start={str_id}"
+        # বট ইউজারনেম রিয়েল ও সঠিক রাখার জন্য সরাসরি BOT_USERNAME ব্যবহার করা হয়েছে (বট ইউজারনেম `@` সহ অথবা ছাড়া যেমনটি কনফিগারেশনে থাকবে)
+        clean_bot_uname = BOT_USERNAME.strip().lstrip('@')
+        ref_link = f"https://t.me/{clean_bot_uname}?start={str_id}"
         ref_bonus = db_get_setting("referral_bonus", "100")
         await update.message.reply_text(
             f"👥 **রেফার এবং ইনকাম প্রোগ্রাম**\n───────────────────\n"
