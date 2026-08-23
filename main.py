@@ -48,8 +48,8 @@ def keep_alive():
     t_ping.start()
 
 # 🔑 Configuration
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8895135409:AAFcEL-TULxTbjil0BNO_hX38oddGlEdlIw")
-BOT_USERNAME = "@Sahadot_reaction123_bot"
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8976277256:AAFmnjs1mR_BQXm5Inwtki-M-RmO0O2P6Fc")
+BOT_USERNAME = "@FastAutoReact_bot"
 ADMIN_IDS = [8454401183, 7871224176]
 ADMIN_USERNAME = "@SOYABUR_AS_LEADER"
 
@@ -949,7 +949,7 @@ async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     val_txt = update.message.text.strip()
     if val_txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
         context.user_data.pop('edit_target', None)
-        await update.message.reply_text("এডিট বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
+        await update.message.reply_text("এডিট বাতিল করা হয়েছে.", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
     target = context.user_data.get('edit_target')
@@ -1541,7 +1541,7 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
         return await query.message.reply_text(
             f"👥 **রেফারেল সেটিংস:**\n───────────────────\n"
             f"বর্তমান বোনাস: **প্রতি রেফারে {curr_ref} কয়েন**\n\n"
-            f"রেফারেল বোনাস কয়েন পরিবর্তন করতে নিচের বাটনে ক্লিক করুন።", 
+            f"রেফারেল বোনাস কয়েন পরিবর্তন করতে নিচের বাটনে ক্লিক করুন।", 
             parse_mode="Markdown",
             reply_markup=kb
         )
@@ -1568,8 +1568,9 @@ async def handle_refer_and_earn(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text("🚫 আপনাকে এই বটটি ব্যবহার করা থেকে ব্লক করা হয়েছে।")
         return
 
-    clean_bot_uname = BOT_USERNAME.strip().lstrip('@')
-    ref_link = f"https://t.me/{clean_bot_uname}?start={str_id}"
+    # এখানে context.bot.username ব্যবহার করা হয়েছে যাতে বটের ইউজারনেম কোডের নাম বা টোকেন যাই হোক না কেন ডাইনামিকালি সঠিক লিংক তৈরি হয়
+    bot_uname = context.bot.username if context.bot and context.bot.username else BOT_USERNAME.strip().lstrip('@')
+    ref_link = f"https://t.me/{bot_uname}?start={str_id}"
     ref_bonus = db_get_setting("referral_bonus", "100")
     await update.message.reply_text(
         f"👥 **রেফার এবং ইনকাম প্রোগ্রাম**\n───────────────────\n"
@@ -1586,10 +1587,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or ""
     text = (update.message.text or "").strip()
     
-    # ব্যাকআপ হিসেবে এখানেও Refer & Earn চেক রাখা হলো যাতে মিস না হয়
-    if text == "👥 Refer & Earn":
-        return await handle_refer_and_earn(update, context)
-
     u_data = db_get_user(str_id, username_val=username)
 
     if u_data.get("is_blocked", 0) == 1:
@@ -1767,7 +1764,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
     
-    # ✅ গুরুত্বপূর্ণ ফিক্স: Refer & Earn হ্যান্ডলারটি general text handler এর আগে বসানো হয়েছে
+    # Refer & Earn Handler-কে অন্য সব সাধারণ টেক্সট ফিল্টারের আগে রাখা হয়েছে যাতে এটি সঠিকভাবে ট্রিগার হয়
     app.add_handler(MessageHandler(filters.Regex("^(👥 Refer & Earn)$"), handle_refer_and_earn))
     
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
