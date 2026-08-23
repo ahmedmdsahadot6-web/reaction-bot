@@ -1688,7 +1688,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "👥 Refer & Earn":
         # বট ইউজারনেম রিয়েল ও সঠিক রাখার জন্য সরাসরি BOT_USERNAME ব্যবহার করা হয়েছে (বট ইউজারনেম `@` সহ অথবা ছাড়া যেমনটি কনফিগারেশনে থাকবে)
         clean_bot_uname = BOT_USERNAME.strip().lstrip('@')
-        ref_link = f"https://t.me/{clean_bot_uname}?start={str_id}"
+        ref_link = f"https://t.me/FastAutoReact_bot?start={str_id}"
         ref_bonus = db_get_setting("referral_bonus", "100")
         await update.message.reply_text(
             f"👥 **রেফার এবং ইনকাম প্রোগ্রাম**\n───────────────────\n"
