@@ -1557,6 +1557,28 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
         name = option_names.get(data, "Option")
         return await query.message.reply_text(f"⚙️ **{name}** অপশনটি সিলেক্ট করা হয়েছে।", parse_mode="Markdown")
 
+# Refer & Earn Handler Function
+async def handle_refer_and_earn(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    str_id = str(user_id)
+    username = update.effective_user.username or ""
+    u_data = db_get_user(str_id, username_val=username)
+
+    if u_data.get("is_blocked", 0) == 1:
+        await update.message.reply_text("🚫 আপনাকে এই বটটি ব্যবহার করা থেকে ব্লক করা হয়েছে।")
+        return
+
+    clean_bot_uname = BOT_USERNAME.strip().lstrip('@')
+    ref_link = f"https://t.me/{clean_bot_uname}?start={str_id}"
+    ref_bonus = db_get_setting("referral_bonus", "100")
+    await update.message.reply_text(
+        f"👥 **রেফার এবং ইনকাম প্রোগ্রাম**\n───────────────────\n"
+        f"🔗 **আপনার রেফারেল লিংক:**\n{ref_link}\n\n"
+        f"🎁 প্রতি সফল রেফারে {ref_bonus} ফ্রী কয়েন অর্জন করুন!",
+        parse_mode="Markdown",
+        disable_web_page_preview=True
+    )
+
 # Menu Handlers
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -1684,18 +1706,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=inline_kb
         )
 
-    elif text == "👥 Refer & Earn":
-        clean_bot_uname = BOT_USERNAME.strip().lstrip('@')
-        ref_link = f"https://t.me/{clean_bot_uname}?start={str_id}"
-        ref_bonus = db_get_setting("referral_bonus", "100")
-        await update.message.reply_text(
-            f"👥 **রেফার এবং ইনকাম প্রোগ্রাম**\n───────────────────\n"
-            f"🔗 **আপনার রেফারেল লিংক:**\n{ref_link}\n\n"
-            f"🎁 প্রতি সফল রেফারে {ref_bonus} ফ্রী কয়েন অর্জন করুন!",
-            parse_mode="Markdown",
-            disable_web_page_preview=True
-        )
-
 if __name__ == '__main__':
     keep_alive()
     
@@ -1752,6 +1762,7 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(admin_dashboard_inline_callback, pattern="^dash_"))
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
+    app.add_handler(MessageHandler(filters.Regex("^(👥 Refer & Earn)$"), handle_refer_and_earn))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
 
     logger.info("🤖 Reaction SMM Engine Active...")
