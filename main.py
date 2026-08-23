@@ -1541,7 +1541,7 @@ async def admin_dashboard_inline_callback(update: Update, context: ContextTypes.
         return await query.message.reply_text(
             f"👥 **রেফারেল সেটিংস:**\n───────────────────\n"
             f"বর্তমান বোনাস: **প্রতি রেফারে {curr_ref} কয়েন**\n\n"
-            f"রেফারেল বোনাস কয়েন পরিবর্তন করতে নিচের বাটনে ক্লিক করুন।", 
+            f"রেফারেল বোনাস কয়েন পরিবর্তন করতে নিচের বাটনে ক্লিক করুন።", 
             parse_mode="Markdown",
             reply_markup=kb
         )
@@ -1586,6 +1586,10 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or ""
     text = (update.message.text or "").strip()
     
+    # ব্যাকআপ হিসেবে এখানেও Refer & Earn চেক রাখা হলো যাতে মিস না হয়
+    if text == "👥 Refer & Earn":
+        return await handle_refer_and_earn(update, context)
+
     u_data = db_get_user(str_id, username_val=username)
 
     if u_data.get("is_blocked", 0) == 1:
@@ -1762,7 +1766,10 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(admin_dashboard_inline_callback, pattern="^dash_"))
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('admin', admin_panel_command))
+    
+    # ✅ গুরুত্বপূর্ণ ফিক্স: Refer & Earn হ্যান্ডলারটি general text handler এর আগে বসানো হয়েছে
     app.add_handler(MessageHandler(filters.Regex("^(👥 Refer & Earn)$"), handle_refer_and_earn))
+    
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu))
 
     logger.info("🤖 Reaction SMM Engine Active...")
