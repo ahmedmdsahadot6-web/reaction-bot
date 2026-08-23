@@ -1684,8 +1684,8 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=inline_kb
         )
 
-    elif text == "👥 Refer & Earn":
-        # ডায়নামিক্যালি বর্তমান বটের ইউজারনেম সংগ্রহ করা হচ্ছে, যাতে বট বা ইউজারনেম চেঞ্জ করলেও সঠিক লিংক দেখায়
+    # সব ধরণের ইমোজি এবং স্পেস ভেরিয়েশন চেক করার জন্য কন্ডিশন আপডেট করা হয়েছে
+    elif "Refer & Earn" in text or "রেফার" in text:
         bot_uname = context.bot.username if context.bot and context.bot.username else BOT_USERNAME.strip().lstrip('@')
         clean_bot_uname = bot_uname.strip().lstrip('@')
         ref_link = f"https://t.me/{clean_bot_uname}?start={str_id}"
