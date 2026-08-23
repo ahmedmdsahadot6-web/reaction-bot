@@ -949,7 +949,7 @@ async def save_edited_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     val_txt = update.message.text.strip()
     if val_txt in ["❌ Cancel", "Cancel", "❌ বাতিল করুন", "বাতিল করুন"]:
         context.user_data.pop('edit_target', None)
-        await update.message.reply_text("এডিট বাতিল করা হয়েছে。", reply_markup=get_user_keyboard())
+        await update.message.reply_text("এডিট বাতিল করা হয়েছে।", reply_markup=get_user_keyboard())
         return ConversationHandler.END
 
     target = context.user_data.get('edit_target')
@@ -1685,8 +1685,9 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif text == "👥 Refer & Earn":
-        # বট ইউজারনেম স্বয়ংক্রিয়ভাবে ট্র্যাক করার জন্য কোড আপডেট করা হয়েছে
-        clean_bot_uname = BOT_USERNAME.strip().lstrip('@')
+        # ডায়নামিক্যালি বর্তমান বটের ইউজারনেম সংগ্রহ করা হচ্ছে, যাতে বট বা ইউজারনেম চেঞ্জ করলেও সঠিক লিংক দেখায়
+        bot_uname = context.bot.username if context.bot and context.bot.username else BOT_USERNAME.strip().lstrip('@')
+        clean_bot_uname = bot_uname.strip().lstrip('@')
         ref_link = f"https://t.me/{clean_bot_uname}?start={str_id}"
         ref_bonus = db_get_setting("referral_bonus", "100")
         await update.message.reply_text(
